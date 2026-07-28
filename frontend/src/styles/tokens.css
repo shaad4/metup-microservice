@@ -1,0 +1,11 @@
+:root {
+  --color-paper:     #F7F5F0;
+  --color-paper-alt:  #EFEBE2;
+  --color-ink:        #1B1B18;
+  --color-ink-muted:  #6B6860;
+  --color-signal:     #E1A83D;
+  --color-signal-dim: #F3D999;
+  --color-presence:   #1F5C55;
+  --color-hairline:   #D8D3C7;
+  --color-alert:      #B23A2E;
+}
