@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
-export default function AuthPage() {
+export default function AuthPage({ onBackToEvents }) {
   const { login, register } = useAuth();
   const [mode, setMode] = useState('login'); // 'login' or 'register'
   
@@ -84,6 +84,9 @@ export default function AuthPage() {
         setSuccessUser(username);
       }
       setAuthSuccess(true);
+      setTimeout(() => {
+        if (onBackToEvents) onBackToEvents();
+      }, 1000);
     } catch (apiErrors) {
       if (typeof apiErrors === 'object') {
         setErrors(apiErrors);
@@ -102,6 +105,15 @@ export default function AuthPage() {
         The form container blends completely into the page background.
       */}
       <div className="w-full max-w-[400px] flex flex-col py-8 box-border">
+        {onBackToEvents && (
+          <button
+            type="button"
+            onClick={onBackToEvents}
+            className="self-start text-xs font-medium text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors duration-150 mb-8 flex items-center gap-1.5 cursor-pointer font-sans select-none"
+          >
+            ← Back to events
+          </button>
+        )}
         
         {/* Logo and Intro */}
         <div className="mb-10 text-center select-none">

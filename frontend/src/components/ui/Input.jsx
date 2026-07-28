@@ -8,11 +8,11 @@ export default function Input({
   ...props
 }) {
   return (
-    <div className="w-full flex flex-col mb-4">
+    <div className="w-full flex flex-col mb-6">
       {label && (
         <label
           htmlFor={id}
-          className="font-sans text-sm text-[var(--color-ink-muted)] mb-1.5 selection:bg-[var(--color-signal-dim)] select-none"
+          className="font-sans text-[10px] text-[var(--color-ink-muted)] mb-1 uppercase tracking-wider font-semibold select-none"
         >
           {label}
         </label>
@@ -20,9 +20,9 @@ export default function Input({
       <input
         id={id}
         type={type}
-        className={`w-full bg-[var(--color-paper)] text-[var(--color-ink)] border ${
+        className={`w-full bg-transparent text-[var(--color-ink)] border-b ${
           error ? 'border-[var(--color-alert)]' : 'border-[var(--color-hairline)]'
-        } focus:border-[var(--color-presence)] focus:outline-none py-2.5 px-3 rounded-[4px] font-sans text-base transition-colors duration-200`}
+        } focus:border-[var(--color-presence)] focus:outline-none py-2 px-0 font-sans text-base transition-all duration-200 placeholder:text-[var(--color-ink-muted)]/30`}
         {...props}
       />
       {error && (
