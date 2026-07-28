@@ -16,7 +16,7 @@ class GRPCJWTAuthentication(authentication.BaseAuthentication):
             return None  # No credentials provided
 
         token = auth_header.split(' ', 1)[1].strip()
-        valid, user_id, error = verify_token(token)
+        valid, user_id, _, error = verify_token(token)
 
         if not valid:
             raise exceptions.AuthenticationFailed(error or "Invalid token")
