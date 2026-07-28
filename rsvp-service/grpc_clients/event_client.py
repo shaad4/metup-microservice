@@ -14,6 +14,6 @@ def check_capacity(event_id: int):
     stub = event_pb2_grpc.EventInternalStub(channel)
     try:
         response = stub.CheckCapacity(event_pb2.EventRequest(event_id=str(event_id)), timeout=3)
-        return response.exists, response.capacity, response.error
+        return response.exists, response.capacity, response.error, response.title, response.start_time
     except grpc.RpcError as e:
-        return False, None, f"Event service unreachable: {e.details()}"
+        return False, None, f"Event service unreachable: {e.details()}", "", ""

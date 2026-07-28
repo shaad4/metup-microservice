@@ -2,6 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, ValidationError
+from .rabbitmq_publisher import publish_message
 
 from .models import RSVP
 from .serializers import RSVPSerializer
@@ -16,8 +17,9 @@ class JoinEventView(APIView):
 
     def post(self, request, event_id):
         user_id = request.user.id
+        user_email = request.user.email
 
-        exists, capacity, error = check_capacity(event_id)
+        exists, capacity, error, event_title, event_start_time = check_capacity(event_id)
         if not exists:
             raise NotFound(error or "Event not found")
 
@@ -45,6 +47,29 @@ class JoinEventView(APIView):
 
         rsvp.status = 'joined'
         rsvp.save()
+
+        new_count = current_joined + 1
+
+        publish_message({
+            "type": "user_joined_event",
+            "event_id": event_id,
+            "event_title": event_title,
+            "event_start_time": event_start_time,
+            "user_id": user_id,
+            "user_email": user_email,
+            "current_count": new_count,
+            "capacity": capacity,
+        })
+
+        if new_count == capacity:
+            publish_message({
+                "type": "event_full",
+                "event_id": event_id,
+                "event_title": event_title,
+                "current_count": new_count,
+                "capacity": capacity,
+            })
+
 
         return Response(RSVPSerializer(rsvp).data, status=status.HTTP_201_CREATED)
 

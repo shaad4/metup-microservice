@@ -17,9 +17,9 @@ class GRPCJWTAuthentication(authentication.BaseAuthentication):
             return None  # no credentials attempted — DRF treats as anonymous
 
         token = auth_header.split(' ', 1)[1].strip()
-        valid, user_id, error = verify_token(token)
+        valid, user_id, email, error = verify_token(token)
 
         if not valid:
             raise exceptions.AuthenticationFailed(error or "Invalid token")
 
-        return (GRPCUser(user_id), None)
+        return (GRPCUser(user_id, email), None)
