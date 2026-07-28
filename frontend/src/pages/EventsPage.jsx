@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { fetchEvents, createEvent, updateEvent, fetchEventDetail } from '../api/events';
+import { fetchEvents, createEvent, updateEvent, fetchEventDetail, deleteEvent } from '../api/events';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
@@ -44,6 +44,8 @@ export default function EventsPage({ onNavigateAuth }) {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   // Form toggles
   const [isCreating, setIsCreating] = useState(false);
@@ -69,6 +71,27 @@ export default function EventsPage({ onNavigateAuth }) {
   // Loading/Error for forms
   const [formErrors, setFormErrors] = useState({});
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Promise-based confirmation popup helper
+  const triggerConfirm = (options) => {
+    return new Promise((resolve) => {
+      setConfirmDialog({
+        title: options.title || 'Are you sure?',
+        message: options.message || '',
+        confirmText: options.confirmText || 'Confirm',
+        cancelText: options.cancelText || 'Cancel',
+        isDanger: options.isDanger || false,
+        onConfirm: () => {
+          setConfirmDialog(null);
+          resolve(true);
+        },
+        onCancel: () => {
+          setConfirmDialog(null);
+          resolve(false);
+        }
+      });
+    });
+  };
 
   // Constants
   const monthNames = [
@@ -116,6 +139,41 @@ export default function EventsPage({ onNavigateAuth }) {
       console.error(err);
     } finally {
       setIsDetailLoading(false);
+    }
+  };
+
+  // Delete event
+  const handleDeleteEvent = async (eventId) => {
+    console.log('[handleDeleteEvent] Delete request triggered. Spawning custom confirmation popup...');
+    const confirmed = await triggerConfirm({
+      title: "Delete Event",
+      message: "Are you sure you want to delete this event? This action cannot be undone.",
+      confirmText: "Delete",
+      isDanger: true
+    });
+    console.log('[handleDeleteEvent] Delete confirmation resolved with value:', confirmed);
+    if (!confirmed) {
+      return;
+    }
+
+    setActionLoading(true);
+    setFormErrors({});
+    try {
+      console.log('[handleDeleteEvent] Sending DELETE request for eventId:', eventId);
+      await deleteEvent(eventId, accessToken);
+      console.log('[handleDeleteEvent] Event deleted successfully from backend');
+      setShowDeleteConfirm(false);
+      setSelectedEventId(null); // Go back to catalog
+      await loadEventsList();
+    } catch (err) {
+      console.error('[handleDeleteEvent] Delete request failed:', err);
+      if (typeof err === 'object') {
+        setFormErrors(err);
+      } else {
+        setFormErrors({ non_field_errors: 'Failed to delete the event.' });
+      }
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -305,6 +363,7 @@ export default function EventsPage({ onNavigateAuth }) {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    console.log('[handleFormSubmit] Form submission started...');
     setActionLoading(true);
     setFormErrors({});
 
@@ -320,9 +379,25 @@ export default function EventsPage({ onNavigateAuth }) {
     }
 
     if (Object.keys(errors).length > 0) {
+      console.warn('[handleFormSubmit] Validation failed:', errors);
       setFormErrors(errors);
       setActionLoading(false);
       return;
+    }
+
+    if (editingEventId) {
+      console.log('[handleFormSubmit] Editing event. Spawning custom confirmation popup...');
+      const confirmed = await triggerConfirm({
+        title: "Save changes",
+        message: "Are you sure you want to save changes to this event?",
+        confirmText: "Save",
+        isDanger: false
+      });
+      console.log('[handleFormSubmit] Confirmation resolved with value:', confirmed);
+      if (!confirmed) {
+        setActionLoading(false);
+        return;
+      }
     }
 
     try {
@@ -345,19 +420,24 @@ export default function EventsPage({ onNavigateAuth }) {
         capacity: parseInt(capacity),
       };
 
+      console.log('[handleFormSubmit] Sending request to event-service with payload:', eventData);
+
       if (editingEventId) {
         await updateEvent(editingEventId, eventData, accessToken);
+        console.log('[handleFormSubmit] Event updated successfully in backend');
         if (selectedEventId === editingEventId) {
           loadEventDetail(editingEventId);
         }
         setEditingEventId(null);
       } else {
         await createEvent(eventData, accessToken);
+        console.log('[handleFormSubmit] Event created successfully in backend');
         setIsCreating(false);
       }
       resetForm();
       await loadEventsList();
     } catch (err) {
+      console.error('[handleFormSubmit] Save request failed:', err);
       if (typeof err === 'object') {
         setFormErrors(err);
       } else {
@@ -504,15 +584,43 @@ export default function EventsPage({ onNavigateAuth }) {
                     </p>
                   )}
 
-                  {/* Edit triggering */}
-                  {user && user.id === selectedEvent.created_by && !editingEventId && (
-                    <div className="mt-10 pt-6 border-t border-[var(--color-hairline)]">
+                  {/* Edit and Delete triggering */}
+                  {user && String(user.id) === String(selectedEvent.created_by) && !editingEventId && (
+                    <div className="mt-10 pt-6 border-t border-[var(--color-hairline)] flex items-center gap-3">
                       <button
                         onClick={() => handleEditInit(selectedEvent)}
                         className="font-sans text-xs font-semibold uppercase tracking-wider py-2.5 px-4 rounded-[4px] border border-[var(--color-ink)] hover:bg-[var(--color-paper-alt)] cursor-pointer transition-all duration-150"
                       >
                         Edit this event
                       </button>
+                      {showDeleteConfirm ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteEvent(selectedEvent.id)}
+                            disabled={actionLoading}
+                            className="font-sans text-xs font-semibold uppercase tracking-wider py-2.5 px-4 rounded-[4px] bg-[var(--color-alert)] text-[var(--color-paper)] hover:opacity-90 cursor-pointer border-none"
+                          >
+                            Confirm delete
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowDeleteConfirm(false)}
+                            disabled={actionLoading}
+                            className="text-xs text-[var(--color-ink-muted)] hover:underline cursor-pointer font-sans"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowDeleteConfirm(true)}
+                          className="font-sans text-xs font-semibold uppercase tracking-wider py-2.5 px-4 rounded-[4px] border border-[var(--color-alert)] text-[var(--color-alert)] hover:bg-[var(--color-alert)]/10 cursor-pointer transition-all duration-150"
+                        >
+                          Delete event
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -778,10 +886,28 @@ export default function EventsPage({ onNavigateAuth }) {
                         min="1"
                       />
 
-                      <div className="mt-8">
-                        <Button type="submit" isLoading={actionLoading}>
-                          Save changes
-                        </Button>
+                      <div className="mt-8 flex gap-3 items-center">
+                        <div className="flex-1">
+                          <Button type="submit" isLoading={actionLoading}>
+                            Save changes
+                          </Button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          disabled={actionLoading}
+                          className="font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 rounded-[4px] border border-[var(--color-hairline)] bg-transparent text-[var(--color-ink)] hover:border-[var(--color-ink)] cursor-pointer transition-all duration-150"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEvent(editingEventId)}
+                          disabled={actionLoading}
+                          className="font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 rounded-[4px] border border-[var(--color-alert)] text-[var(--color-alert)] hover:bg-[var(--color-alert)]/10 cursor-pointer transition-all duration-150"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </form>
                   </div>
@@ -823,9 +949,20 @@ export default function EventsPage({ onNavigateAuth }) {
               {/* Form Column left side (when creating) */}
               {isFormOpen && (
                 <div className="lg:col-span-2 lg:border-r lg:border-[var(--color-hairline)] lg:pr-12 animate-fadeIn w-full">
-                  <h3 className="font-display text-xl font-semibold mb-8 border-b border-[var(--color-hairline)] pb-3 select-none">
-                    Create Event
-                  </h3>
+                  <div className="flex justify-between items-center mb-8 border-b border-[var(--color-hairline)] pb-3 select-none">
+                    <h3 className="font-display text-xl font-semibold m-0">
+                      {editingEventId ? 'Edit Event' : 'Create Event'}
+                    </h3>
+                    {editingEventId && (
+                      <button 
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:underline cursor-pointer bg-transparent border-none"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
 
                   <form onSubmit={handleFormSubmit} noValidate className="w-full">
                     {formErrors.non_field_errors && (
@@ -1026,10 +1163,32 @@ export default function EventsPage({ onNavigateAuth }) {
                       min="1"
                     />
 
-                    <div className="mt-8">
-                      <Button type="submit" isLoading={actionLoading}>
-                        Publish event
-                      </Button>
+                    <div className="mt-8 flex gap-3 items-center">
+                      <div className="flex-1">
+                        <Button type="submit" isLoading={actionLoading}>
+                          {editingEventId ? 'Save changes' : 'Publish event'}
+                        </Button>
+                      </div>
+                      {editingEventId && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            disabled={actionLoading}
+                            className="font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 rounded-[4px] border border-[var(--color-hairline)] bg-transparent text-[var(--color-ink)] hover:border-[var(--color-ink)] cursor-pointer transition-all duration-150"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteEvent(editingEventId)}
+                            disabled={actionLoading}
+                            className="font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 rounded-[4px] border border-[var(--color-alert)] text-[var(--color-alert)] hover:bg-[var(--color-alert)]/10 cursor-pointer transition-all duration-150"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </div>
                   </form>
                 </div>
@@ -1072,7 +1231,7 @@ export default function EventsPage({ onNavigateAuth }) {
                   <div className="flex flex-col border-t border-[var(--color-hairline)]">
                     {events.map((event) => {
                       const { day, month, time } = parseEventDate(event.start_time);
-                      const isOwner = user && user.id === event.created_by;
+                      const isOwner = user && String(user.id) === String(event.created_by);
 
                       return (
                         <div 
@@ -1163,6 +1322,38 @@ export default function EventsPage({ onNavigateAuth }) {
           STRICTLY MINIMALIST CATALOG
         </span>
       </footer>
+
+      {/* Custom Confirmation Modal */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-[var(--color-ink)]/15 backdrop-blur-[1px] z-[999] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[var(--color-paper)] border border-[var(--color-hairline)] w-full max-w-sm p-6 select-none box-border rounded-none">
+            <h4 className="font-display text-lg font-semibold text-[var(--color-ink)] m-0 mb-2">
+              {confirmDialog.title}
+            </h4>
+            <p className="font-sans text-sm text-[var(--color-ink-muted)] m-0 mb-6 leading-relaxed">
+              {confirmDialog.message}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={confirmDialog.onCancel}
+                className="font-sans text-xs font-semibold uppercase tracking-wider py-2.5 px-4 rounded-[4px] border border-[var(--color-hairline)] bg-transparent text-[var(--color-ink)] hover:border-[var(--color-ink)] transition-colors cursor-pointer"
+              >
+                {confirmDialog.cancelText}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDialog.onConfirm}
+                className={`font-sans text-xs font-semibold uppercase tracking-wider py-2.5 px-4 rounded-[4px] border-none text-[var(--color-paper)] cursor-pointer transition-opacity hover:opacity-90 ${
+                  confirmDialog.isDanger ? 'bg-[var(--color-alert)]' : 'bg-[var(--color-presence)]'
+                }`}
+              >
+                {confirmDialog.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

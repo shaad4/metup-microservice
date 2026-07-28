@@ -4,15 +4,42 @@ import { loginUser, registerUser } from '../api/auth';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [accessToken, setAccessToken] = useState(null);
+  // Initialize access token state from localStorage
+  const [accessToken, setAccessTokenState] = useState(() => {
+    return localStorage.getItem('metups_access_token') || null;
+  });
+
+  // Initialize user details state from localStorage
+  const [user, setUser] = useState(() => {
+    const token = localStorage.getItem('metups_access_token');
+    const storedUser = localStorage.getItem('metups_user');
+    if (token && storedUser) {
+      try {
+        return JSON.parse(storedUser);
+      } catch (e) {
+        console.error('Failed to parse stored user session:', e);
+        return null;
+      }
+    }
+    return null;
+  });
+
+  // Synchronize state and localStorage updates for the token
+  const setAccessToken = (token) => {
+    if (token) {
+      localStorage.setItem('metups_access_token', token);
+    } else {
+      localStorage.removeItem('metups_access_token');
+    }
+    setAccessTokenState(token);
+  };
 
   const login = async (username, password) => {
     try {
       const data = await loginUser(username, password);
       setAccessToken(data.access);
       
-      // Attempt to decode user_id from the JWT token
+      // Decode user_id from the JWT payload
       let userId = null;
       try {
         const payload = JSON.parse(atob(data.access.split('.')[1]));
@@ -21,8 +48,10 @@ export function AuthProvider({ children }) {
         console.error('Failed to decode JWT payload:', e);
       }
 
-      setUser({ id: userId, username });
-      console.log('Login successful. Token acquired:', data.access);
+      const userInfo = { id: userId, username };
+      setUser(userInfo);
+      localStorage.setItem('metups_user', JSON.stringify(userInfo));
+      console.log('Login successful. Session persisted.');
       return { success: true };
     } catch (errors) {
       console.error('Login error in AuthContext:', errors);
@@ -33,9 +62,22 @@ export function AuthProvider({ children }) {
   const register = async (username, email, password) => {
     try {
       const data = await registerUser(username, email, password);
-      setUser(data.user);
       setAccessToken(data.access);
-      console.log('Registration successful. User:', data.user, 'Token:', data.access);
+
+      let userId = null;
+      if (data.user && data.user.id) {
+        userId = data.user.id;
+      } else {
+        try {
+          const payload = JSON.parse(atob(data.access.split('.')[1]));
+          userId = payload.user_id;
+        } catch (e) {}
+      }
+
+      const userInfo = { id: userId, username };
+      setUser(userInfo);
+      localStorage.setItem('metups_user', JSON.stringify(userInfo));
+      console.log('Registration successful. Session persisted.');
       return { success: true };
     } catch (errors) {
       console.error('Registration error in AuthContext:', errors);
@@ -46,7 +88,9 @@ export function AuthProvider({ children }) {
   const logout = () => {
     setUser(null);
     setAccessToken(null);
-    console.log('User logged out.');
+    localStorage.removeItem('metups_access_token');
+    localStorage.removeItem('metups_user');
+    console.log('User logged out. Session cleared.');
   };
 
   return (

@@ -6,6 +6,9 @@ const BASE_URL = 'http://localhost:8002/api/events';
 async function parseError(response) {
   try {
     const data = await response.json();
+    if (data.detail) {
+      return { non_field_errors: data.detail };
+    }
     const formattedErrors = {};
     for (const key in data) {
       if (Array.isArray(data[key])) {
@@ -106,5 +109,29 @@ export async function fetchEventDetail(eventId) {
     throw errors;
   }
 
+  return response.json();
+}
+
+/**
+ * Deletes an existing event.
+ * @param {number} eventId
+ * @param {string} token - JWT access token
+ */
+export async function deleteEvent(eventId, token) {
+  const response = await fetch(`${BASE_URL}/${eventId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errors = await parseError(response);
+    throw errors;
+  }
+
+  if (response.status === 204) {
+    return true;
+  }
   return response.json();
 }
