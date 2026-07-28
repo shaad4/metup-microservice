@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchEvents, createEvent, updateEvent, fetchEventDetail, deleteEvent } from '../api/events';
+import { getRsvpStatus, joinEvent, leaveEvent, getMyEvents } from '../api/rsvp';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
@@ -47,6 +48,15 @@ export default function EventsPage({ onNavigateAuth }) {
   const [detailError, setDetailError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
+
+  // RSVP State
+  const [viewMode, setViewMode] = useState('all'); // 'all' or 'mine'
+  const [rsvpJoined, setRsvpJoined] = useState(false);
+  const [rsvpLoading, setRsvpLoading] = useState(false);
+  const [rsvpError, setRsvpError] = useState('');
+  const [myEventsList, setMyEventsList] = useState([]);
+  const [myEventsLoading, setMyEventsLoading] = useState(false);
+  const [myEventsError, setMyEventsError] = useState('');
 
   // Form toggles
   const [isCreating, setIsCreating] = useState(false);
@@ -147,6 +157,114 @@ export default function EventsPage({ onNavigateAuth }) {
     }
   };
 
+  // Load RSVP status
+  const loadRsvpStatus = async (eventId) => {
+    if (!user || !accessToken) return;
+    setRsvpLoading(true);
+    setRsvpError('');
+    try {
+      const res = await getRsvpStatus(eventId, accessToken);
+      setRsvpJoined(res.joined);
+    } catch (err) {
+      console.error('Failed to load RSVP status:', err);
+      setRsvpError('Failed to verify reservation status.');
+    } finally {
+      setRsvpLoading(false);
+    }
+  };
+
+  // Join Event action
+  const handleJoinEvent = async (eventId) => {
+    if (!user || !accessToken) return;
+    
+    const confirmed = await triggerConfirm({
+      title: "Join Event",
+      message: `Are you sure you want to RSVP for "${selectedEvent?.title || 'this event'}"?`,
+      confirmText: "Join",
+      isDanger: false
+    });
+    if (!confirmed) return;
+
+    setRsvpLoading(true);
+    setRsvpError('');
+    try {
+      await joinEvent(eventId, accessToken);
+      setRsvpJoined(true);
+      await loadEventsList();
+    } catch (err) {
+      console.error('Join error:', err);
+      if (err && err.non_field_errors) {
+        setRsvpError(err.non_field_errors);
+      } else {
+        setRsvpError('This event is full.');
+      }
+    } finally {
+      setRsvpLoading(false);
+    }
+  };
+
+  // Leave Event action
+  const handleLeaveEvent = async (eventId) => {
+    if (!user || !accessToken) return;
+
+    const confirmed = await triggerConfirm({
+      title: "Leave Event",
+      message: `Are you sure you want to cancel your reservation for "${selectedEvent?.title || 'this event'}"?`,
+      confirmText: "Leave",
+      isDanger: true
+    });
+    if (!confirmed) return;
+
+    setRsvpLoading(true);
+    setRsvpError('');
+    try {
+      await leaveEvent(eventId, accessToken);
+      setRsvpJoined(false);
+      await loadEventsList();
+    } catch (err) {
+      console.error('Leave error:', err);
+      if (err && err.non_field_errors) {
+        setRsvpError(err.non_field_errors);
+      } else {
+        setRsvpError('Failed to leave the event.');
+      }
+    } finally {
+      setRsvpLoading(false);
+    }
+  };
+
+  // Load My RSVPs list
+  const loadMyJoinedEvents = async () => {
+    if (!user || !accessToken) return;
+    setMyEventsLoading(true);
+    setMyEventsError('');
+    try {
+      const rsvps = await getMyEvents(accessToken);
+      const allEvents = await fetchEvents();
+      const joined = [];
+
+      for (const rsvp of rsvps) {
+        let matched = allEvents.find(e => String(e.id) === String(rsvp.event_id));
+        if (!matched) {
+          try {
+            matched = await fetchEventDetail(rsvp.event_id);
+          } catch (e) {
+            console.warn(`Could not fetch details for event ${rsvp.event_id}`);
+          }
+        }
+        if (matched) {
+          joined.push({ ...matched, rsvpId: rsvp.id, rsvpStatus: rsvp.status });
+        }
+      }
+      setMyEventsList(joined);
+    } catch (err) {
+      console.error('Failed to load my events:', err);
+      setMyEventsError('Failed to retrieve your reservations.');
+    } finally {
+      setMyEventsLoading(false);
+    }
+  };
+
   // Delete event
   const handleDeleteEvent = async (eventId) => {
     console.log('[handleDeleteEvent] Delete request triggered. Spawning custom confirmation popup...');
@@ -183,14 +301,21 @@ export default function EventsPage({ onNavigateAuth }) {
   };
 
   useEffect(() => {
-    loadEventsList();
-  }, []);
+    if (viewMode === 'mine') {
+      loadMyJoinedEvents();
+    } else {
+      loadEventsList();
+    }
+  }, [viewMode, accessToken]);
 
   useEffect(() => {
     if (selectedEventId) {
       loadEventDetail(selectedEventId);
+      loadRsvpStatus(selectedEventId);
     } else {
       setSelectedEvent(null);
+      setRsvpJoined(false);
+      setRsvpError('');
     }
   }, [selectedEventId]);
 
@@ -504,15 +629,33 @@ export default function EventsPage({ onNavigateAuth }) {
       <header className="sticky top-0 w-full border-b border-[var(--color-hairline)] py-4 px-6 md:px-12 flex justify-between items-center select-none bg-[var(--color-paper)]/95 backdrop-blur-[4px] z-40 transition-colors duration-200">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => { setSelectedEventId(null); handleCancelEdit(); setIsCreating(false); }}
+            onClick={() => { setSelectedEventId(null); handleCancelEdit(); setIsCreating(false); setViewMode('all'); }}
             className="font-display text-2xl m-0 tracking-tight font-semibold bg-transparent border-none cursor-pointer text-[var(--color-ink)]"
           >
             MetUps
           </button>
           <span className="h-4 w-[1px] bg-[var(--color-hairline)] hidden md:inline"></span>
-          <span className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-widest uppercase hidden md:inline">
-            Exhibition Directory
-          </span>
+          <button
+            onClick={() => { setSelectedEventId(null); handleCancelEdit(); setIsCreating(false); setViewMode('all'); }}
+            className={`font-mono text-[9px] tracking-widest uppercase cursor-pointer border-none bg-transparent ${
+              viewMode === 'all' ? 'text-[var(--color-ink)] font-bold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'
+            }`}
+          >
+            Directory
+          </button>
+          {user && (
+            <>
+              <span className="h-4 w-[1px] bg-[var(--color-hairline)] hidden md:inline"></span>
+              <button
+                onClick={() => { setSelectedEventId(null); handleCancelEdit(); setIsCreating(false); setViewMode('mine'); }}
+                className={`font-mono text-[9px] tracking-widest uppercase cursor-pointer border-none bg-transparent ${
+                  viewMode === 'mine' ? 'text-[var(--color-ink)] font-bold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'
+                }`}
+              >
+                My Schedule
+              </button>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-6">
@@ -544,6 +687,7 @@ export default function EventsPage({ onNavigateAuth }) {
                     onClick={() => {
                       setShowProfileMenu(false);
                       logout();
+                      setViewMode('all');
                     }}
                     className="w-full text-left font-sans text-xs text-[var(--color-alert)] hover:underline cursor-pointer border-none bg-transparent p-0 font-semibold"
                   >
@@ -698,6 +842,55 @@ export default function EventsPage({ onNavigateAuth }) {
                         {selectedEvent.capacity} spots available
                       </span>
                     </div>
+                  </div>
+
+                  {/* RSVP Actions Block */}
+                  <div className="mt-4 pt-6 border-t border-[var(--color-hairline)] select-none">
+                    {!user ? (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={onNavigateAuth}
+                          className="w-full text-center font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 border border-[var(--color-ink)] hover:bg-[var(--color-paper-alt)] cursor-pointer rounded-[4px]"
+                        >
+                          Sign in to join
+                        </button>
+                        <p className="text-[10px] font-sans text-[var(--color-ink-muted)] text-center mt-2 leading-relaxed">
+                          You must be authenticated to RSVP for this event.
+                        </p>
+                      </div>
+                    ) : String(user.id) === String(selectedEvent.created_by) ? (
+                      <p className="text-[10px] font-mono text-[var(--color-ink-muted)] text-center italic py-2">
+                        You are hosting this event.
+                      </p>
+                    ) : (
+                      <div>
+                        {rsvpJoined ? (
+                          <button
+                            type="button"
+                            onClick={() => handleLeaveEvent(selectedEvent.id)}
+                            disabled={rsvpLoading}
+                            className="w-full text-center font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 border border-[var(--color-alert)] text-[var(--color-alert)] hover:bg-[var(--color-alert)]/10 cursor-pointer rounded-[4px] disabled:opacity-50 transition-colors"
+                          >
+                            {rsvpLoading ? 'Leaving...' : 'Leave Event'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleJoinEvent(selectedEvent.id)}
+                            disabled={rsvpLoading}
+                            className="w-full text-center font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 bg-[var(--color-ink)] text-[var(--color-paper)] hover:opacity-90 cursor-pointer rounded-[4px] disabled:opacity-50 transition-all border-none"
+                          >
+                            {rsvpLoading ? 'Joining...' : 'Join Event'}
+                          </button>
+                        )}
+                        {rsvpError && (
+                          <p className="text-[10px] font-sans text-[var(--color-alert)] text-center mt-2.5 leading-normal max-w-[220px] mx-auto">
+                            {rsvpError}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -952,14 +1145,14 @@ export default function EventsPage({ onNavigateAuth }) {
             <div className="flex justify-between items-end border-b border-[var(--color-hairline)] pb-6 mb-12 select-none">
               <div>
                 <h1 className="font-display text-4xl md:text-5xl m-0 tracking-tight font-semibold">
-                  Events
+                  {viewMode === 'mine' ? 'My Schedule' : 'Events'}
                 </h1>
                 <p className="font-sans text-sm text-[var(--color-ink-muted)] mt-2 leading-relaxed">
-                  A curated catalog of upcoming gatherings.
+                  {viewMode === 'mine' ? 'A list of gatherings you have reserved spots for.' : 'A curated catalog of upcoming gatherings.'}
                 </p>
               </div>
               
-              {!editingEventId && (
+              {!editingEventId && viewMode !== 'mine' && (
                 <button
                   onClick={handleCreateToggle}
                   className={`font-sans text-xs font-semibold uppercase tracking-wider py-3 px-5 rounded-[4px] border border-[var(--color-ink)] cursor-pointer transition-all duration-200 ${
@@ -1226,113 +1419,211 @@ export default function EventsPage({ onNavigateAuth }) {
               {/* List Column */}
               <div className={`${isFormOpen ? 'lg:col-span-3' : 'lg:col-span-5'} w-full transition-all duration-300`}>
                 
-                {isLoading ? (
-                  <div className="py-24 text-center select-none">
-                    <svg className="animate-spin h-6 w-6 text-[var(--color-presence)] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <p className="font-sans text-xs uppercase tracking-wider text-[var(--color-ink-muted)]">Retrieving entries...</p>
-                  </div>
-                ) : fetchError ? (
-                  <div className="py-20 text-center select-none">
-                    <p className="font-sans text-sm text-[var(--color-alert)]">{fetchError}</p>
-                    <button
-                      onClick={loadEventsList}
-                      className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer"
-                    >
-                      Force reload
-                    </button>
-                  </div>
-                ) : events.length === 0 ? (
-                  <div className="py-24 border border-[var(--color-hairline)] border-dashed text-center select-none">
-                    <p className="font-sans text-sm text-[var(--color-ink-muted)]">No entries registered in the catalog.</p>
-                    {user && (
+                {viewMode === 'mine' ? (
+                  myEventsLoading ? (
+                    <div className="py-24 text-center select-none">
+                      <svg className="animate-spin h-6 w-6 text-[var(--color-presence)] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="font-sans text-xs uppercase tracking-wider text-[var(--color-ink-muted)]">Retrieving your schedule...</p>
+                    </div>
+                  ) : myEventsError ? (
+                    <div className="py-20 text-center select-none">
+                      <p className="font-sans text-sm text-[var(--color-alert)]">{myEventsError}</p>
                       <button
-                        onClick={handleCreateToggle}
+                        onClick={loadMyJoinedEvents}
+                        className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer bg-transparent border-none"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : myEventsList.length === 0 ? (
+                    <div className="py-24 border border-[var(--color-hairline)] border-dashed text-center select-none">
+                      <p className="font-sans text-sm text-[var(--color-ink-muted)]">You haven't joined any events yet.</p>
+                      <button
+                        onClick={() => setViewMode('all')}
+                        className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer bg-transparent border-none"
+                      >
+                        Explore Event Feed
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col border-t border-[var(--color-hairline)] animate-fadeIn">
+                      {myEventsList.map((event) => {
+                        const { day, month, time } = parseEventDate(event.start_time);
+                        return (
+                          <div 
+                            key={event.id}
+                            className="flex border-b border-[var(--color-hairline)] py-8 md:py-10 items-start gap-6 md:gap-8 hover:bg-[var(--color-paper-alt)]/25 transition-colors duration-150 cursor-pointer"
+                            onClick={() => setSelectedEventId(event.id)}
+                          >
+                            {/* Left Side: Date stamp */}
+                            <div className="flex flex-col items-center justify-center min-w-[60px] select-none text-center">
+                              <span className="font-display text-4xl font-semibold text-[var(--color-presence)] leading-none tracking-tighter">
+                                {day}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-widest mt-2 uppercase font-semibold">
+                                {month}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] mt-1 opacity-70">
+                                {time.split(' ')[0]}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] opacity-50 uppercase">
+                                {time.split(' ')[1]}
+                              </span>
+                            </div>
+
+                            {/* Structural vertical divider */}
+                            <div className="w-[1px] self-stretch bg-[var(--color-hairline)]" onClick={(e) => e.stopPropagation()}></div>
+
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start gap-4">
+                                <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
+                                  {event.title}
+                                </h3>
+                                <span className="text-[9px] font-mono font-semibold uppercase tracking-widest text-[var(--color-presence)] bg-[var(--color-presence)]/10 px-2 py-0.5 border border-[var(--color-presence)]/20 select-none">
+                                  Joined
+                                </span>
+                              </div>
+                              
+                              {event.description && (
+                                <p className="font-sans text-sm text-[var(--color-ink-muted)] mt-2.5 leading-relaxed max-w-[600px] truncate">
+                                  {event.description}
+                                </p>
+                              )}
+
+                              {/* Metadata Row using icons instead of text labels */}
+                              <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">
+                                <span className="flex items-center gap-2">
+                                  <MapPinIcon />
+                                  <span className="text-[var(--color-ink)] font-medium font-sans">{event.location}</span>
+                                </span>
+                                <span className="flex items-center gap-2">
+                                  <UsersIcon />
+                                  <span className="font-mono text-[var(--color-ink)]">{event.capacity}</span>
+                                </span>
+                                <span className="flex items-center gap-2">
+                                  <ClockIcon />
+                                  <span className="font-mono text-[var(--color-ink)]">{time}</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  isLoading ? (
+                    <div className="py-24 text-center select-none">
+                      <svg className="animate-spin h-6 w-6 text-[var(--color-presence)] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="font-sans text-xs uppercase tracking-wider text-[var(--color-ink-muted)]">Retrieving entries...</p>
+                    </div>
+                  ) : fetchError ? (
+                    <div className="py-20 text-center select-none">
+                      <p className="font-sans text-sm text-[var(--color-alert)]">{fetchError}</p>
+                      <button
+                        onClick={loadEventsList}
                         className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer"
                       >
-                        Draft first event
+                        Force reload
                       </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col border-t border-[var(--color-hairline)]">
-                    {events.map((event) => {
-                      const { day, month, time } = parseEventDate(event.start_time);
-                      const isOwner = user && String(user.id) === String(event.created_by);
-
-                      return (
-                        <div 
-                          key={event.id}
-                          className="flex border-b border-[var(--color-hairline)] py-8 md:py-10 items-start gap-6 md:gap-8 hover:bg-[var(--color-paper-alt)]/25 transition-colors duration-150 cursor-pointer"
-                          onClick={() => setSelectedEventId(event.id)}
+                    </div>
+                  ) : events.length === 0 ? (
+                    <div className="py-24 border border-[var(--color-hairline)] border-dashed text-center select-none">
+                      <p className="font-sans text-sm text-[var(--color-ink-muted)]">No entries registered in the catalog.</p>
+                      {user && (
+                        <button
+                          onClick={handleCreateToggle}
+                          className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer"
                         >
-                          {/* Left Side: Date stamp */}
-                          <div className="flex flex-col items-center justify-center min-w-[60px] select-none text-center">
-                            <span className="font-display text-4xl font-semibold text-[var(--color-presence)] leading-none tracking-tighter">
-                              {day}
-                            </span>
-                            <span className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-widest mt-2 uppercase font-semibold">
-                              {month}
-                            </span>
-                            <span className="font-mono text-[9px] text-[var(--color-ink-muted)] mt-1 opacity-70">
-                              {time.split(' ')[0]}
-                            </span>
-                            <span className="font-mono text-[9px] text-[var(--color-ink-muted)] opacity-50 uppercase">
-                              {time.split(' ')[1]}
-                            </span>
-                          </div>
+                          Draft first event
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col border-t border-[var(--color-hairline)] animate-fadeIn">
+                      {events.map((event) => {
+                        const { day, month, time } = parseEventDate(event.start_time);
+                        const isOwner = user && String(user.id) === String(event.created_by);
 
-                          {/* Structural vertical divider */}
-                          <div className="w-[1px] self-stretch bg-[var(--color-hairline)]" onClick={(e) => e.stopPropagation()}></div>
+                        return (
+                          <div 
+                            key={event.id}
+                            className="flex border-b border-[var(--color-hairline)] py-8 md:py-10 items-start gap-6 md:gap-8 hover:bg-[var(--color-paper-alt)]/25 transition-colors duration-150 cursor-pointer"
+                            onClick={() => setSelectedEventId(event.id)}
+                          >
+                            {/* Left Side: Date stamp */}
+                            <div className="flex flex-col items-center justify-center min-w-[60px] select-none text-center">
+                              <span className="font-display text-4xl font-semibold text-[var(--color-presence)] leading-none tracking-tighter">
+                                {day}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-widest mt-2 uppercase font-semibold">
+                                {month}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] mt-1 opacity-70">
+                                {time.split(' ')[0]}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] opacity-50 uppercase">
+                                {time.split(' ')[1]}
+                              </span>
+                            </div>
 
-                          {/* Details */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start gap-4">
-                              <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
-                                {event.title}
-                              </h3>
-                              {isOwner && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditInit(event);
-                                  }}
-                                  className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none"
-                                >
-                                  Edit
-                                </button>
+                            {/* Structural vertical divider */}
+                            <div className="w-[1px] self-stretch bg-[var(--color-hairline)]" onClick={(e) => e.stopPropagation()}></div>
+
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start gap-4">
+                                <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
+                                  {event.title}
+                                </h3>
+                                {isOwner && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditInit(event);
+                                    }}
+                                    className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                              </div>
+                              
+                              {event.description && (
+                                <p className="font-sans text-sm text-[var(--color-ink-muted)] mt-2.5 leading-relaxed max-w-[600px] truncate">
+                                  {event.description}
+                                </p>
                               )}
-                            </div>
-                            
-                            {event.description && (
-                              <p className="font-sans text-sm text-[var(--color-ink-muted)] mt-2.5 leading-relaxed max-w-[600px] truncate">
-                                {event.description}
-                              </p>
-                            )}
 
-                            {/* Metadata Row using icons instead of text labels */}
-                            <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">
-                              <span className="flex items-center gap-2">
-                                <MapPinIcon />
-                                <span className="text-[var(--color-ink)] font-medium font-sans">{event.location}</span>
-                              </span>
-                              <span className="flex items-center gap-2">
-                                <UsersIcon />
-                                <span className="font-mono text-[var(--color-ink)]">{event.capacity}</span>
-                              </span>
-                              <span className="flex items-center gap-2">
-                                <ClockIcon />
-                                <span className="font-mono text-[var(--color-ink)]">{time}</span>
-                              </span>
+                              {/* Metadata Row using icons instead of text labels */}
+                              <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">
+                                <span className="flex items-center gap-2">
+                                  <MapPinIcon />
+                                  <span className="text-[var(--color-ink)] font-medium font-sans">{event.location}</span>
+                                </span>
+                                <span className="flex items-center gap-2">
+                                  <UsersIcon />
+                                  <span className="font-mono text-[var(--color-ink)]">{event.capacity}</span>
+                                </span>
+                                <span className="flex items-center gap-2">
+                                  <ClockIcon />
+                                  <span className="font-mono text-[var(--color-ink)]">{time}</span>
+                                </span>
+                              </div>
                             </div>
+
                           </div>
-
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )
                 )}
               </div>
 
