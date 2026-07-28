@@ -132,7 +132,7 @@ ELASTICSEARCH_DSL = {
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTStatelessUserAuthentication',
+        'events.authentication.GRPCJWTAuthentication',
     )
 }
 
