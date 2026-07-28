@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package event;
+
+service EventInternal {
+  rpc CheckCapacity (EventRequest) returns (CapacityResponse);
+}
+
+message EventRequest {
+  string event_id = 1;
+}
+
+message CapacityResponse {
+  bool exists = 1;
+  int32 capacity = 2;
+  string error = 3;
+}
