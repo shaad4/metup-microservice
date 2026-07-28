@@ -39,11 +39,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     'rest_framework',
+    'corsheaders',
     'django_elasticsearch_dsl',
     'events',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -138,3 +140,7 @@ SIMPLE_JWT = {
     'SIGNING_KEY': 'django-insecure-pigv(&apuh2$r75ic@cym9*c_9si&w7$b3he(z8$xr!(9)t64f',
     'ALGORITHM': 'HS256',
 }
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
