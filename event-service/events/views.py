@@ -38,12 +38,12 @@ class EventListCreateView(generics.ListCreateAPIView):
         print("CACHE INVALIDATED: events:list (new event created)")
 
 
-class EventDetailView(generics.RetrieveUpdateAPIView):
+class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
 
     def get_permissions(self):
-        if self.request.method in ('PATCH', 'PUT'):
+        if self.request.method in ('PATCH', 'PUT', 'DELETE'):
             return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
 
@@ -63,7 +63,7 @@ class EventDetailView(generics.RetrieveUpdateAPIView):
 
     def perform_update(self, serializer):
         event = self.get_object()
-        if event.created_by != self.request.user.id:
+        if str(event.created_by) != str(self.request.user.id):
             raise PermissionDenied("Only the event creator can edit this event.")
 
         instance = serializer.save()
@@ -71,6 +71,12 @@ class EventDetailView(generics.RetrieveUpdateAPIView):
         cache.delete(LIST_CACHE_KEY)
         print(f"CACHE INVALIDATED: events:detail:{instance.id} and events:list")
 
+    def perform_destroy(self, instance):
+        if str(instance.created_by) != str(self.request.user.id):
+            raise PermissionDenied("Only the event creator can delete this event.")
+        instance.delete()
+        cache.delete(f"events:detail:{instance.id}")
+        cache.delete(LIST_CACHE_KEY)
     
 
 
