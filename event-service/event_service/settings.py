@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     'rest_framework',
+    'django_elasticsearch_dsl',
     'events',
 ]
 
@@ -118,3 +119,22 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Elasticsearch Configuration
+# https://django-elasticsearch-dsl.readthedocs.io/en/latest/quickstart.html
+ELASTICSEARCH_DSL = {
+    'default': {
+        'hosts': 'http://localhost:9200'
+    },
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTStatelessUserAuthentication',
+    )
+}
+
+SIMPLE_JWT = {
+    'SIGNING_KEY': 'django-insecure-pigv(&apuh2$r75ic@cym9*c_9si&w7$b3he(z8$xr!(9)t64f',
+    'ALGORITHM': 'HS256',
+}
