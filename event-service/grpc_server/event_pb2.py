@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x65vent.proto\x12\x05\x65vent\" \n\x0c\x45ventRequest\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\"C\n\x10\x43\x61pacityResponse\x12\x0e\n\x06\x65xists\x18\x01 \x01(\x08\x12\x10\n\x08\x63\x61pacity\x18\x02 \x01(\x05\x12\r\n\x05\x65rror\x18\x03 \x01(\t2N\n\rEventInternal\x12=\n\rCheckCapacity\x12\x13.event.EventRequest\x1a\x17.event.CapacityResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x65vent.proto\x12\x05\x65vent\" \n\x0c\x45ventRequest\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\"f\n\x10\x43\x61pacityResponse\x12\x0e\n\x06\x65xists\x18\x01 \x01(\x08\x12\x10\n\x08\x63\x61pacity\x18\x02 \x01(\x05\x12\r\n\x05\x65rror\x18\x03 \x01(\t\x12\r\n\x05title\x18\x04 \x01(\t\x12\x12\n\nstart_time\x18\x05 \x01(\t2N\n\rEventInternal\x12=\n\rCheckCapacity\x12\x13.event.EventRequest\x1a\x17.event.CapacityResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,7 +34,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_EVENTREQUEST']._serialized_start=22
   _globals['_EVENTREQUEST']._serialized_end=54
   _globals['_CAPACITYRESPONSE']._serialized_start=56
-  _globals['_CAPACITYRESPONSE']._serialized_end=123
-  _globals['_EVENTINTERNAL']._serialized_start=125
-  _globals['_EVENTINTERNAL']._serialized_end=203
+  _globals['_CAPACITYRESPONSE']._serialized_end=158
+  _globals['_EVENTINTERNAL']._serialized_start=160
+  _globals['_EVENTINTERNAL']._serialized_end=238
 # @@protoc_insertion_point(module_scope)

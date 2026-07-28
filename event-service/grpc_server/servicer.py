@@ -17,9 +17,9 @@ class EventInternalServicer(event_pb2_grpc.EventInternalServicer):
             return event_pb2.CapacityResponse(
                 exists=True,
                 capacity=event.capacity,
-                error=""
+                error="",
+                title=event.title,
+                start_time=event.start_time.isoformat(),
             )
         except Event.DoesNotExist:
-            return event_pb2.CapacityResponse(exists=False, capacity=0, error="Event not found")
-        except (ValueError, TypeError):
-            return event_pb2.CapacityResponse(exists=False, capacity=0, error="Invalid event_id")
+            return event_pb2.CapacityResponse(exists=False, capacity=0, error="Event not found", title="", start_time="")
