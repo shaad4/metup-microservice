@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nauth.proto\x12\x04\x61uth\"\x1d\n\x0cTokenRequest\x12\r\n\x05token\x18\x01 \x01(\t\">\n\rTokenResponse\x12\r\n\x05valid\x18\x01 \x01(\x08\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t2F\n\x0c\x41uthInternal\x12\x36\n\x0bVerifyToken\x12\x12.auth.TokenRequest\x1a\x13.auth.TokenResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nauth.proto\x12\x04\x61uth\"\x1d\n\x0cTokenRequest\x12\r\n\x05token\x18\x01 \x01(\t\"M\n\rTokenResponse\x12\r\n\x05valid\x18\x01 \x01(\x08\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\x12\r\n\x05\x65mail\x18\x04 \x01(\t2F\n\x0c\x41uthInternal\x12\x36\n\x0bVerifyToken\x12\x12.auth.TokenRequest\x1a\x13.auth.TokenResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,7 +34,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_TOKENREQUEST']._serialized_start=20
   _globals['_TOKENREQUEST']._serialized_end=49
   _globals['_TOKENRESPONSE']._serialized_start=51
-  _globals['_TOKENRESPONSE']._serialized_end=113
-  _globals['_AUTHINTERNAL']._serialized_start=115
-  _globals['_AUTHINTERNAL']._serialized_end=185
+  _globals['_TOKENRESPONSE']._serialized_end=128
+  _globals['_AUTHINTERNAL']._serialized_start=130
+  _globals['_AUTHINTERNAL']._serialized_end=200
 # @@protoc_insertion_point(module_scope)

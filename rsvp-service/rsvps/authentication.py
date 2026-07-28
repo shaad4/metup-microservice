@@ -4,8 +4,9 @@ from grpc_clients.auth_client import verify_token
 
 class GRPCUser:
     """Minimal stand-in for a User object, just enough for request.user.id to work."""
-    def __init__(self, user_id):
+    def __init__(self, user_id, email):
         self.id = user_id
+        self.email = email
         self.is_authenticated = True
 
 
