@@ -33,6 +33,7 @@ const ClockIcon = () => (
 export default function EventsPage({ onNavigateAuth }) {
   const { user, accessToken, logout } = useAuth();
   const calendarRef = useRef(null);
+  const profileMenuRef = useRef(null);
   
   // Data state
   const [events, setEvents] = useState([]);
@@ -65,6 +66,7 @@ export default function EventsPage({ onNavigateAuth }) {
   
   // Custom Calendar Popover States
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
 
@@ -99,11 +101,14 @@ export default function EventsPage({ onNavigateAuth }) {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  // Close calendar if clicking outside
+  // Close calendar or profile dropdown if clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (calendarRef.current && !calendarRef.current.contains(event.target)) {
         setShowCalendar(false);
+      }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -496,7 +501,7 @@ export default function EventsPage({ onNavigateAuth }) {
     <div className="w-full min-h-screen bg-[var(--color-paper)] text-[var(--color-ink)] flex flex-col font-sans">
       
       {/* Header */}
-      <header className="w-full border-b border-[var(--color-hairline)] py-6 px-6 md:px-12 flex justify-between items-center select-none">
+      <header className="sticky top-0 w-full border-b border-[var(--color-hairline)] py-4 px-6 md:px-12 flex justify-between items-center select-none bg-[var(--color-paper)]/95 backdrop-blur-[4px] z-40 transition-colors duration-200">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => { setSelectedEventId(null); handleCancelEdit(); setIsCreating(false); }}
@@ -512,16 +517,40 @@ export default function EventsPage({ onNavigateAuth }) {
 
         <div className="flex items-center gap-6">
           {user ? (
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-[var(--color-ink-muted)]">
-                USER: <strong className="text-[var(--color-ink)] font-semibold uppercase font-mono">{user.username}</strong>
-              </span>
+            <div className="relative" ref={profileMenuRef}>
               <button
-                onClick={logout}
-                className="text-xs text-[var(--color-alert)] hover:underline cursor-pointer font-sans"
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center gap-2 border border-[var(--color-hairline)] bg-[var(--color-paper-alt)]/40 hover:bg-[var(--color-paper-alt)] py-1.5 pl-2 pr-3 rounded-full cursor-pointer transition-colors duration-150"
               >
-                Sign out
+                {/* Dummy Avatar Circle */}
+                <div className="w-6 h-6 rounded-full bg-[var(--color-presence)] text-[var(--color-paper)] flex items-center justify-center font-mono text-[10px] font-bold uppercase select-none">
+                  {user.username.slice(0, 1)}
+                </div>
+                <span className="font-mono text-xs text-[var(--color-ink)] font-semibold uppercase tracking-wider">
+                  {user.username}
+                </span>
+                <span className="text-[8px] text-[var(--color-ink-muted)] ml-0.5">▼</span>
               </button>
+
+              {/* Profile Dropdown Menu */}
+              {showProfileMenu && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--color-paper)] border border-[var(--color-hairline)] p-4 z-50 flex flex-col gap-3 rounded-none animate-fadeIn box-border">
+                  <div className="flex flex-col select-none">
+                    <span className="text-[9px] font-mono text-[var(--color-ink-muted)] uppercase tracking-wider">Signed in as</span>
+                    <span className="text-xs font-mono text-[var(--color-ink)] font-semibold truncate uppercase mt-0.5">{user.username}</span>
+                  </div>
+                  <div className="h-[1px] w-full bg-[var(--color-hairline)]"></div>
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      logout();
+                    }}
+                    className="w-full text-left font-sans text-xs text-[var(--color-alert)] hover:underline cursor-pointer border-none bg-transparent p-0 font-semibold"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <button
