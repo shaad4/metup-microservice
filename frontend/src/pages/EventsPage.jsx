@@ -654,6 +654,15 @@ export default function EventsPage({ onNavigateAuth }) {
               >
                 My Schedule
               </button>
+              <span className="h-4 w-[1px] bg-[var(--color-hairline)] hidden md:inline"></span>
+              <button
+                onClick={() => { setSelectedEventId(null); handleCancelEdit(); setIsCreating(false); setViewMode('hosted'); }}
+                className={`font-mono text-[9px] tracking-widest uppercase cursor-pointer border-none bg-transparent ${
+                  viewMode === 'hosted' ? 'text-[var(--color-ink)] font-bold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'
+                }`}
+              >
+                My Listings
+              </button>
             </>
           )}
         </div>
@@ -1145,10 +1154,14 @@ export default function EventsPage({ onNavigateAuth }) {
             <div className="flex justify-between items-end border-b border-[var(--color-hairline)] pb-6 mb-12 select-none">
               <div>
                 <h1 className="font-display text-4xl md:text-5xl m-0 tracking-tight font-semibold">
-                  {viewMode === 'mine' ? 'My Schedule' : 'Events'}
+                  {viewMode === 'mine' ? 'My Schedule' : viewMode === 'hosted' ? 'My Listings' : 'Events'}
                 </h1>
                 <p className="font-sans text-sm text-[var(--color-ink-muted)] mt-2 leading-relaxed">
-                  {viewMode === 'mine' ? 'A list of gatherings you have reserved spots for.' : 'A curated catalog of upcoming gatherings.'}
+                  {viewMode === 'mine' 
+                    ? 'A list of gatherings you have reserved spots for.' 
+                    : viewMode === 'hosted' 
+                      ? 'Gatherings hosted and managed by you.' 
+                      : 'A curated catalog of upcoming gatherings.'}
                 </p>
               </div>
               
@@ -1416,7 +1429,6 @@ export default function EventsPage({ onNavigateAuth }) {
                 </div>
               )}
 
-              {/* List Column */}
               <div className={`${isFormOpen ? 'lg:col-span-3' : 'lg:col-span-5'} w-full transition-all duration-300`}>
                 
                 {viewMode === 'mine' ? (
@@ -1486,6 +1498,108 @@ export default function EventsPage({ onNavigateAuth }) {
                                 <span className="text-[9px] font-mono font-semibold uppercase tracking-widest text-[var(--color-presence)] bg-[var(--color-presence)]/10 px-2 py-0.5 border border-[var(--color-presence)]/20 select-none">
                                   Joined
                                 </span>
+                              </div>
+                              
+                              {event.description && (
+                                <p className="font-sans text-sm text-[var(--color-ink-muted)] mt-2.5 leading-relaxed max-w-[600px] truncate">
+                                  {event.description}
+                                </p>
+                              )}
+
+                              {/* Metadata Row using icons instead of text labels */}
+                              <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">
+                                <span className="flex items-center gap-2">
+                                  <MapPinIcon />
+                                  <span className="text-[var(--color-ink)] font-medium font-sans">{event.location}</span>
+                                </span>
+                                <span className="flex items-center gap-2">
+                                  <UsersIcon />
+                                  <span className="font-mono text-[var(--color-ink)]">{event.capacity}</span>
+                                </span>
+                                <span className="flex items-center gap-2">
+                                  <ClockIcon />
+                                  <span className="font-mono text-[var(--color-ink)]">{time}</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : viewMode === 'hosted' ? (
+                  isLoading ? (
+                    <div className="py-24 text-center select-none">
+                      <svg className="animate-spin h-6 w-6 text-[var(--color-presence)] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="font-sans text-xs uppercase tracking-wider text-[var(--color-ink-muted)]">Retrieving listings...</p>
+                    </div>
+                  ) : fetchError ? (
+                    <div className="py-20 text-center select-none">
+                      <p className="font-sans text-sm text-[var(--color-alert)]">{fetchError}</p>
+                      <button
+                        onClick={loadEventsList}
+                        className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer bg-transparent border-none"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : events.filter(e => user && String(e.created_by) === String(user.id)).length === 0 ? (
+                    <div className="py-24 border border-[var(--color-hairline)] border-dashed text-center select-none">
+                      <p className="font-sans text-sm text-[var(--color-ink-muted)]">You aren't hosting any events yet.</p>
+                      <button
+                        onClick={handleCreateToggle}
+                        className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer bg-transparent border-none"
+                      >
+                        Create your first event
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col border-t border-[var(--color-hairline)] animate-fadeIn">
+                      {events.filter(e => user && String(e.created_by) === String(user.id)).map((event) => {
+                        const { day, month, time } = parseEventDate(event.start_time);
+                        return (
+                          <div 
+                            key={event.id}
+                            className="flex border-b border-[var(--color-hairline)] py-8 md:py-10 items-start gap-6 md:gap-8 hover:bg-[var(--color-paper-alt)]/25 transition-colors duration-150 cursor-pointer"
+                            onClick={() => setSelectedEventId(event.id)}
+                          >
+                            {/* Left Side: Date stamp */}
+                            <div className="flex flex-col items-center justify-center min-w-[60px] select-none text-center">
+                              <span className="font-display text-4xl font-semibold text-[var(--color-presence)] leading-none tracking-tighter">
+                                {day}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-widest mt-2 uppercase font-semibold">
+                                {month}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] mt-1 opacity-70">
+                                {time.split(' ')[0]}
+                              </span>
+                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] opacity-50 uppercase">
+                                {time.split(' ')[1]}
+                              </span>
+                            </div>
+
+                            {/* Structural vertical divider */}
+                            <div className="w-[1px] self-stretch bg-[var(--color-hairline)]" onClick={(e) => e.stopPropagation()}></div>
+
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start gap-4">
+                                <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
+                                  {event.title}
+                                </h3>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditInit(event);
+                                  }}
+                                  className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none bg-transparent"
+                                >
+                                  Edit
+                                </button>
                               </div>
                               
                               {event.description && (
