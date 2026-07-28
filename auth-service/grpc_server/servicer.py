@@ -6,6 +6,8 @@ django.setup()
 
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth.models import User
+
 
 import auth_pb2
 import auth_pb2_grpc
@@ -14,8 +16,13 @@ import auth_pb2_grpc
 class AuthInternalServicer(auth_pb2_grpc.AuthInternalServicer):
     def VerifyToken(self, request, context):
         try:
-            token = AccessToken(request.token)   
+            token = AccessToken(request.token)
             user_id = token['user_id']
-            return auth_pb2.TokenResponse(valid=True, user_id=str(user_id), error="")
+            user = User.objects.get(pk=user_id)
+            return auth_pb2.TokenResponse(
+                valid=True, user_id=str(user_id), error="", email=user.email
+            )
         except TokenError as e:
-            return auth_pb2.TokenResponse(valid=False, user_id="", error=str(e))
+            return auth_pb2.TokenResponse(valid=False, user_id="", error=str(e), email="")
+        except User.DoesNotExist:
+            return auth_pb2.TokenResponse(valid=False, user_id="", error="User not found", email="")
