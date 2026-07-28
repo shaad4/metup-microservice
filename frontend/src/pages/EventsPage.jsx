@@ -767,7 +767,7 @@ export default function EventsPage({ onNavigateAuth }) {
                   )}
 
                   {/* Edit and Delete triggering */}
-                  {user && String(user.id) === String(selectedEvent.created_by) && !editingEventId && (
+                  {user && String(user.id) === String(selectedEvent.created_by) && !editingEventId && new Date(selectedEvent.start_time) >= new Date() && (
                     <div className="mt-10 pt-6 border-t border-[var(--color-hairline)] flex items-center gap-3">
                       <button
                         onClick={() => handleEditInit(selectedEvent)}
@@ -855,7 +855,11 @@ export default function EventsPage({ onNavigateAuth }) {
 
                   {/* RSVP Actions Block */}
                   <div className="mt-4 pt-6 border-t border-[var(--color-hairline)] select-none">
-                    {!user ? (
+                    {new Date(selectedEvent.start_time) < new Date() ? (
+                      <p className="text-[10px] font-mono text-[var(--color-ink-muted)] text-center italic py-2">
+                        This event has ended.
+                      </p>
+                    ) : !user ? (
                       <div>
                         <button
                           type="button"
@@ -1591,15 +1595,17 @@ export default function EventsPage({ onNavigateAuth }) {
                                 <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
                                   {event.title}
                                 </h3>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditInit(event);
-                                  }}
-                                  className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none bg-transparent"
-                                >
-                                  Edit
-                                </button>
+                                {new Date(event.start_time) >= new Date() && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditInit(event);
+                                    }}
+                                    className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none bg-transparent"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
                               </div>
                               
                               {event.description && (
@@ -1648,7 +1654,7 @@ export default function EventsPage({ onNavigateAuth }) {
                         Force reload
                       </button>
                     </div>
-                  ) : events.length === 0 ? (
+                  ) : events.filter(e => new Date(e.start_time) >= new Date()).length === 0 ? (
                     <div className="py-24 border border-[var(--color-hairline)] border-dashed text-center select-none">
                       <p className="font-sans text-sm text-[var(--color-ink-muted)]">No entries registered in the catalog.</p>
                       {user && (
@@ -1662,7 +1668,7 @@ export default function EventsPage({ onNavigateAuth }) {
                     </div>
                   ) : (
                     <div className="flex flex-col border-t border-[var(--color-hairline)] animate-fadeIn">
-                      {events.map((event) => {
+                      {events.filter(e => new Date(e.start_time) >= new Date()).map((event) => {
                         const { day, month, time } = parseEventDate(event.start_time);
                         const isOwner = user && String(user.id) === String(event.created_by);
 
@@ -1697,13 +1703,13 @@ export default function EventsPage({ onNavigateAuth }) {
                                 <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
                                   {event.title}
                                 </h3>
-                                {isOwner && (
+                                {isOwner && new Date(event.start_time) >= new Date() && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleEditInit(event);
                                     }}
-                                    className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none"
+                                    className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none bg-transparent"
                                   >
                                     Edit
                                   </button>
