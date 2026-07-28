@@ -1,6 +1,7 @@
 from django.core.cache import cache
+from django.utils import timezone
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
@@ -27,12 +28,15 @@ class EventListCreateView(generics.ListCreateAPIView):
             return Response(cached)
 
         print("CACHE MISS: events:list — querying DB")
-        queryset = Event.objects.all().order_by('start_time')
+        queryset = Event.objects.filter(start_time__gte=timezone.now()).order_by('start_time')
         serializer = self.get_serializer(queryset, many=True)
         cache.set(LIST_CACHE_KEY, serializer.data, CACHE_TTL)
         return Response(serializer.data)
 
     def perform_create(self, serializer):
+        start_time = serializer.validated_data.get('start_time')
+        if start_time and start_time < timezone.now():
+            raise ValidationError({"eventDate": "Cannot create events in the past."})
         serializer.save(created_by=self.request.user.id)
         cache.delete(LIST_CACHE_KEY)   
         print("CACHE INVALIDATED: events:list (new event created)")
@@ -65,6 +69,8 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
         event = self.get_object()
         if str(event.created_by) != str(self.request.user.id):
             raise PermissionDenied("Only the event creator can edit this event.")
+        if event.start_time < timezone.now():
+            raise PermissionDenied("Cannot modify past events.")
 
         instance = serializer.save()
         cache.delete(f"events:detail:{instance.id}")
@@ -74,6 +80,8 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         if str(instance.created_by) != str(self.request.user.id):
             raise PermissionDenied("Only the event creator can delete this event.")
+        if instance.start_time < timezone.now():
+            raise PermissionDenied("Cannot delete past events.")
         instance.delete()
         cache.delete(f"events:detail:{instance.id}")
         cache.delete(LIST_CACHE_KEY)
