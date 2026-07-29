@@ -1,9 +1,11 @@
+import os
 import grpc
 from . import event_pb2
 from . import event_pb2_grpc
 
 
-EVENT_GRPC_ADDRESS = "localhost:50052"
+EVENT_GRPC_HOST = os.environ.get('EVENT_GRPC_HOST', 'localhost')
+EVENT_GRPC_ADDRESS = f"{EVENT_GRPC_HOST}:50052"
 
 
 def check_capacity(event_id: int):

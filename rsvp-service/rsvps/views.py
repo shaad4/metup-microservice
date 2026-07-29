@@ -87,6 +87,19 @@ class LeaveEventView(APIView):
         rsvp.status = 'cancelled'
         rsvp.save()
 
+        exists, capacity, error, event_title, event_start_time = check_capacity(event_id)
+        if exists:
+            new_count = RSVP.objects.filter(event_id=event_id, status='joined').count()
+            publish_message({
+                "type": "user_left_event",
+                "event_id": event_id,
+                "event_title": event_title,
+                "event_start_time": event_start_time,
+                "user_id": user_id,
+                "current_count": new_count,
+                "capacity": capacity,
+            })
+
         return Response({"detail": "Left event."}, status=status.HTTP_200_OK)
 
 class MyEventsView(generics.ListAPIView):
@@ -105,3 +118,11 @@ class RSVPStatusView(APIView):
             event_id=event_id, user_id=request.user.id, status='joined'
         ).exists()
         return Response({"joined": joined})
+
+
+class RSVPCountView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, event_id):
+        count = RSVP.objects.filter(event_id=event_id, status='joined').count()
+        return Response({"current_count": count})

@@ -1,7 +1,8 @@
+import os
 import pika
 import json
 
-RABBITMQ_HOST = "localhost"
+RABBITMQ_HOST = os.environ.get('RABBITMQ_HOST', 'localhost')
 QUEUE_NAME = "metups_notifications"
 
 def publish_message(message: dict):
