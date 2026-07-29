@@ -1,4 +1,5 @@
-const BASE_URL = `http://${window.location.hostname}:8002/api/events`;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const BASE_URL = `${API_BASE_URL}/events`;
 
 /**
  * Helper to parse backend error responses.

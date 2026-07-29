@@ -1,4 +1,5 @@
-const BASE_URL = `http://${window.location.hostname}:8001/api/auth`;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const BASE_URL = `${API_BASE_URL}/auth`;
 
 /**
  * Parses error responses from the backend API and converts them into user-friendly strings.

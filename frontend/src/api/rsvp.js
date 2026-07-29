@@ -1,4 +1,5 @@
-const BASE_URL = `http://${window.location.hostname}:8003/api/rsvp`;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const BASE_URL = `${API_BASE_URL}/rsvp`;
 
 /**
  * Parses error responses from the backend RSVP API.

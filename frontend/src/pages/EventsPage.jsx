@@ -435,7 +435,8 @@ export default function EventsPage({ onNavigateAuth }) {
     const connect = () => {
       if (isClosed) return;
 
-      const wsUrl = `ws://${window.location.hostname}:8005/ws/events/`;
+      const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL;
+      const wsUrl = `${WS_BASE_URL}/events/`;
       try {
         socket = new WebSocket(wsUrl);
 
