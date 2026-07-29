@@ -13,13 +13,14 @@ from notifications.tasks import (
 )
 
 QUEUE_NAME = "metups_notifications"
+RABBITMQ_HOST = os.environ.get('RABBITMQ_HOST', 'localhost')
 
 
 class Command(BaseCommand):
     help = "Consume RabbitMQ messages and dispatch Celery tasks"
 
     def handle(self, *args, **options):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
         channel = connection.channel()
         channel.queue_declare(queue=QUEUE_NAME, durable=True)
 
@@ -52,6 +53,11 @@ class Command(BaseCommand):
                         self.stdout.write(f"[WARNING] Invalid event_start_time '{start_time_str}': {e}")
                 else:
                     self.stdout.write("[SKIP] No event_start_time provided in message")
+
+            elif msg_type == "user_left_event":
+                push_attendee_update.delay(
+                    message["event_id"], message["current_count"], message["capacity"]
+                )
 
             elif msg_type == "event_full":
                 push_event_full.delay(
