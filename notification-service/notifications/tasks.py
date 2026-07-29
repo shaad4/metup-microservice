@@ -1,8 +1,11 @@
 import urllib.request
 import json
 import hashlib
+import os
 from dateutil import parser as dateparser
 from celery import shared_task
+
+EVENT_SERVICE_URL = os.environ.get("EVENT_SERVICE_URL", "http://localhost:8002")
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -66,7 +69,7 @@ def push_event_full(event_id, current_count, capacity):
 def send_join_confirmation_email(user_email, event_title, event_id):
     # Fetch details from event-service
     details = None
-    url = f"http://localhost:8002/api/events/{event_id}"
+    url = f"{EVENT_SERVICE_URL}/api/events/{event_id}"
     try:
         req = urllib.request.Request(url, headers={'Accept': 'application/json'})
         with urllib.request.urlopen(req, timeout=3) as response:
@@ -91,7 +94,7 @@ def send_join_confirmation_email(user_email, event_title, event_id):
         try:
             dt = dateparser.isoparse(start_time_str)
             event_date = dt.strftime("%A, %B %d, %Y")
-            event_time = dt.strftime("%i:%M %p").lstrip('0')
+            event_time = dt.strftime("%I:%M %p").lstrip('0')
         except Exception:
             event_date = "Upcoming Date"
             event_time = "TBD"
@@ -132,11 +135,63 @@ def send_join_confirmation_email(user_email, event_title, event_id):
 
 
 @shared_task
-def send_event_reminder_email(user_email, event_title):
-    send_mail(
-        subject=f"Reminder: {event_title} starts in 24 hours",
-        message=f"Just a reminder — {event_title} is coming up in 24 hours.",
+def send_event_reminder_email(user_email, event_title, event_id=None):
+    details = None
+    if event_id:
+        url = f"{EVENT_SERVICE_URL}/api/events/{event_id}"
+        try:
+            req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+            with urllib.request.urlopen(req, timeout=3) as response:
+                if response.status == 200:
+                    details = json.loads(response.read().decode('utf-8'))
+        except Exception as e:
+            print(f"[EMAIL] Failed to fetch event details for reminder {event_id}: {e}")
+
+    # Fallback details if fetching fails or event_id not provided
+    if not details:
+        details = {
+            "title": event_title,
+            "description": "Your upcoming gathering.",
+            "location": "To Be Determined",
+            "start_time": "",
+            "created_by": "Host"
+        }
+
+    # Format Date & Time
+    start_time_str = details.get("start_time")
+    if start_time_str:
+        try:
+            dt = dateparser.isoparse(start_time_str)
+            event_date = dt.strftime("%A, %B %d, %Y")
+            event_time = dt.strftime("%I:%M %p").lstrip('0')
+        except Exception:
+            event_date = "Upcoming Date"
+            event_time = "TBD"
+    else:
+        event_date = "Upcoming Date"
+        event_time = "TBD"
+
+    # Render HTML Context
+    context = {
+        "event_title": details.get("title") or event_title,
+        "event_description": details.get("description"),
+        "event_date": event_date,
+        "event_time": event_time,
+        "event_location": details.get("location") or "To Be Determined",
+        "user_email": user_email,
+        "host_id": details.get("created_by") or "Host"
+    }
+
+    html_content = render_to_string("notifications/reminder_email.html", context)
+    text_content = f"Reminder: {context['event_title']} is coming up in 24 hours.\nDate: {context['event_date']} at {context['event_time']}\nLocation: {context['event_location']}"
+
+    msg = EmailMultiAlternatives(
+        subject=f"⏰ Reminder: {context['event_title']} starts in 24 hours",
+        body=text_content,
         from_email=None,
-        recipient_list=[user_email],
+        to=[user_email]
     )
-    print(f"[EMAIL] reminder sent to {user_email}")
+    msg.attach_alternative(html_content, "text/html")
+    msg.send()
+
+    print(f"[EMAIL] HTML reminder email sent to {user_email} for event {event_id}")

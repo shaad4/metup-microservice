@@ -44,7 +44,7 @@ class Command(BaseCommand):
                         reminder_time = start_time - timedelta(hours=24)
                         if reminder_time > timezone.now():
                             send_event_reminder_email.apply_async(
-                                args=[message["user_email"], message["event_title"]],
+                                args=[message["user_email"], message["event_title"], message.get("event_id")],
                                 eta=reminder_time,
                             )
                         else:
