@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-
+import os
 from pathlib import Path
 from datetime import timedelta
 
@@ -21,12 +21,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-pigv(&apuh2$r75ic@cym9*c_9si&w7$b3he(z8$xr!(9)t64f'
-
+SECRET_KEY = os.environ.get('SECRET_KEY', 'wYiA26py5CfOMLCqyYcgAu-wkl_4SNtDPXLnnQX_Moch_4jewg1--sItVJR3zXC4GRo')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -139,6 +138,4 @@ SIMPLE_JWT = {
     'SIGNING_KEY': SECRET_KEY,   
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
+CORS_ALLOW_ALL_ORIGINS = True
