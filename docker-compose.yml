@@ -89,6 +89,7 @@ services:
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
       - REDIS_HOST=redis
+      - EVENT_SERVICE_URL=http://event-django:8002
 
   notif-asgi:
     build: ./notification-service
@@ -112,6 +113,7 @@ services:
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
       - REDIS_HOST=redis
+      - EVENT_SERVICE_URL=http://event-django:8002
     depends_on:
       - rabbitmq
       - redis
@@ -125,6 +127,7 @@ services:
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
       - RABBITMQ_HOST=rabbitmq
+      - EVENT_SERVICE_URL=http://event-django:8002
     depends_on:
       - rabbitmq
       - notif-celery
