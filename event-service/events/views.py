@@ -8,6 +8,9 @@ from rest_framework.response import Response
 from .models import Event
 from .serializers import EventSerializer
 
+from elasticsearch_dsl import Q
+from .documents import EventDocument
+
 CACHE_TTL = 60
 LIST_CACHE_KEY = "events:list"
 
@@ -86,5 +89,34 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
         cache.delete(f"events:detail:{instance.id}")
         cache.delete(LIST_CACHE_KEY)
     
+class EventSearchView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        query = request.query_params.get('q','').strip()
+
+        if not query:
+            return Response({"detail": "Query parameter 'q' is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        search = EventDocument.search().query(
+            Q('multi_match', query=query, fields=['title^3', 'description', 'location^2'], type='phrase_prefix')
+        ).filter('range', start_time={'gte': timezone.now().isoformat()})
+
+        response = search[:50].execute()
+
+        results = [
+            {
+                "id": hit.meta.id,
+                "title": hit.title,
+                "description": hit.description,
+                "location": hit.location,
+                "start_time": hit.start_time,
+                "capacity": hit.capacity,
+                "created_by": hit.created_by,
+            }
+            for hit in response
+        ]
+
+        return Response({"count": len(results), "results": results})
 
 

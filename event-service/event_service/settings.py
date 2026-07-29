@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,12 +20,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-q107bqnd!6#9@8au-7-uk&tln&tzq=e^2n6wu8@pnqgo)dj*my'
-
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-q107bqnd!6#9@8au-7-uk&tln&tzq=e^2n6wu8@pnqgo)dj*my')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -37,10 +36,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     'rest_framework',
     'corsheaders',
+    'django_elasticsearch_dsl',
+
     'events',
+
 ]
 
 MIDDLEWARE = [
@@ -121,17 +123,30 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'events.authentication.GRPCJWTAuthentication',
-    )
+    ),
 }
 
-SIMPLE_JWT = {
-    'SIGNING_KEY': 'django-insecure-pigv(&apuh2$r75ic@cym9*c_9si&w7$b3he(z8$xr!(9)t64f',
-    'ALGORITHM': 'HS256',
+#  Redis cache 
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"redis://{os.environ.get('REDIS_HOST', 'localhost')}:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+#  Elasticsearch 
+ELASTICSEARCH_DSL = {
+    'default': {
+        'hosts': f"http://{os.environ.get('ELASTICSEARCH_HOST', 'localhost')}:9200"
+    },
+}
