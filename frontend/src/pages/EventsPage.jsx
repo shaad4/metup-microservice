@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchEvents, createEvent, updateEvent, fetchEventDetail, deleteEvent } from '../api/events';
-import { getRsvpStatus, joinEvent, leaveEvent, getMyEvents } from '../api/rsvp';
+import { getRsvpStatus, joinEvent, leaveEvent, getMyEvents, getEventRsvpCount } from '../api/rsvp';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
+import { useEventSocket } from '../hooks/useEventSocket';
+import { AnimatedCounter } from '../components/AnimatedCounter';
+import { CapacityUrgencyGauge } from '../components/CapacityUrgencyGauge';
 
 // SVG Icons
 const MapPinIcon = () => (
@@ -57,6 +60,64 @@ export default function EventsPage({ onNavigateAuth }) {
   const [myEventsList, setMyEventsList] = useState([]);
   const [myEventsLoading, setMyEventsLoading] = useState(false);
   const [myEventsError, setMyEventsError] = useState('');
+  const [initialCount, setInitialCount] = useState(0);
+  const [rsvpCounts, setRsvpCounts] = useState({});
+
+  const { currentCount, isFull } = useEventSocket(
+    selectedEventId,
+    initialCount,
+    selectedEvent ? selectedEvent.capacity : 0
+  );
+
+  // Sync real-time count from websocket to the list view counts dictionary
+  useEffect(() => {
+    if (selectedEventId && currentCount !== undefined) {
+      setRsvpCounts(prev => ({
+        ...prev,
+        [selectedEventId]: currentCount
+      }));
+    }
+  }, [selectedEventId, currentCount]);
+
+  const getCountRemaining = (event) => {
+    const current = rsvpCounts[event.id] !== undefined ? rsvpCounts[event.id] : 0;
+    return event.capacity - current;
+  };
+
+  const renderSpotsBanner = (event) => {
+    const remaining = getCountRemaining(event);
+    const hasStarted = new Date(event.start_time) < new Date();
+    
+    if (hasStarted) {
+      return (
+        <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-[var(--color-ink-muted)] bg-[var(--color-paper-alt)]/60 px-2 py-0.5 border border-[var(--color-hairline)] font-semibold select-none rounded-[4px]">
+          ● Event ended
+        </span>
+      );
+    }
+    
+    if (remaining <= 0) {
+      return (
+        <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-[var(--color-alert)] bg-[var(--color-alert)]/10 px-2 py-0.5 border border-[var(--color-alert)]/20 font-bold select-none rounded-[4px]">
+          ● FULL / No spots left
+        </span>
+      );
+    }
+    
+    if (remaining <= 3) {
+      return (
+        <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-[var(--color-alert)] bg-[var(--color-alert)]/10 px-2 py-0.5 border border-[var(--color-alert)]/20 font-bold select-none rounded-[4px] animate-pulse">
+          ● Only {remaining} {remaining === 1 ? 'spot' : 'spots'} left
+        </span>
+      );
+    }
+    
+    return (
+      <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-[var(--color-presence)] bg-[var(--color-presence)]/10 px-2 py-0.5 border border-[var(--color-presence)]/20 font-bold select-none rounded-[4px]">
+        ● {remaining} {remaining === 1 ? 'spot' : 'spots'} remaining
+      </span>
+    );
+  };
 
   // Form toggles
   const [isCreating, setIsCreating] = useState(false);
@@ -134,6 +195,21 @@ export default function EventsPage({ onNavigateAuth }) {
     try {
       const data = await fetchEvents();
       setEvents(data);
+      
+      // Fetch RSVP counts for all loaded events in parallel
+      const counts = {};
+      await Promise.all(
+        data.map(async (event) => {
+          try {
+            const res = await getEventRsvpCount(event.id);
+            counts[event.id] = res.current_count;
+          } catch (err) {
+            console.error(`Failed to load RSVP count for event ${event.id}:`, err);
+            counts[event.id] = 0;
+          }
+        })
+      );
+      setRsvpCounts(counts);
     } catch (err) {
       setFetchError('Failed to load upcoming events.');
       console.error(err);
@@ -173,6 +249,16 @@ export default function EventsPage({ onNavigateAuth }) {
     }
   };
 
+  // Load RSVP count
+  const loadEventRsvpCount = async (eventId) => {
+    try {
+      const res = await getEventRsvpCount(eventId);
+      setInitialCount(res.current_count);
+    } catch (err) {
+      console.error('Failed to load RSVP count:', err);
+    }
+  };
+
   // Join Event action
   const handleJoinEvent = async (eventId) => {
     if (!user || !accessToken) return;
@@ -191,6 +277,8 @@ export default function EventsPage({ onNavigateAuth }) {
       await joinEvent(eventId, accessToken);
       setRsvpJoined(true);
       await loadEventsList();
+      await loadEventRsvpCount(eventId);
+      await loadMyJoinedEvents();
     } catch (err) {
       console.error('Join error:', err);
       if (err && err.non_field_errors) {
@@ -221,6 +309,8 @@ export default function EventsPage({ onNavigateAuth }) {
       await leaveEvent(eventId, accessToken);
       setRsvpJoined(false);
       await loadEventsList();
+      await loadEventRsvpCount(eventId);
+      await loadMyJoinedEvents();
     } catch (err) {
       console.error('Leave error:', err);
       if (err && err.non_field_errors) {
@@ -257,6 +347,21 @@ export default function EventsPage({ onNavigateAuth }) {
         }
       }
       setMyEventsList(joined);
+
+      // Fetch RSVP counts for each joined event in parallel
+      const counts = {};
+      await Promise.all(
+        joined.map(async (event) => {
+          try {
+            const res = await getEventRsvpCount(event.id);
+            counts[event.id] = res.current_count;
+          } catch (err) {
+            console.error(`Failed to load RSVP count for event ${event.id}:`, err);
+            counts[event.id] = 0;
+          }
+        })
+      );
+      setRsvpCounts(prev => ({ ...prev, ...counts }));
     } catch (err) {
       console.error('Failed to load my events:', err);
       setMyEventsError('Failed to retrieve your reservations.');
@@ -312,12 +417,76 @@ export default function EventsPage({ onNavigateAuth }) {
     if (selectedEventId) {
       loadEventDetail(selectedEventId);
       loadRsvpStatus(selectedEventId);
+      loadEventRsvpCount(selectedEventId);
     } else {
       setSelectedEvent(null);
       setRsvpJoined(false);
       setRsvpError('');
+      setInitialCount(0);
     }
   }, [selectedEventId]);
+
+  // Subscribe to real-time updates for ALL events
+  useEffect(() => {
+    let socket;
+    let reconnectTimeout;
+    let isClosed = false;
+
+    const connect = () => {
+      if (isClosed) return;
+
+      const wsUrl = `ws://${window.location.hostname}:8005/ws/events/`;
+      try {
+        socket = new WebSocket(wsUrl);
+
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'attendee_update' || data.type === 'event_full') {
+              const eventId = data.event_id;
+              const count = data.current_count;
+              if (eventId !== undefined && typeof count === 'number') {
+                setRsvpCounts((prev) => ({
+                  ...prev,
+                  [eventId]: count,
+                }));
+              }
+            }
+          } catch (err) {
+            console.error('[WS Global] Failed to parse message body:', err);
+          }
+        };
+
+        socket.onerror = (error) => {
+          console.error('[WS Global] Error on connection:', error);
+        };
+
+        socket.onclose = (event) => {
+          console.log(`[WS Global] Connection closed (code: ${event.code}). Reconnecting in 3s...`);
+          if (!isClosed) {
+            reconnectTimeout = setTimeout(connect, 3000);
+          }
+        };
+      } catch (e) {
+        console.error('[WS Global] Failed to create WebSocket connection:', e);
+        if (!isClosed) {
+          reconnectTimeout = setTimeout(connect, 3000);
+        }
+      }
+    };
+
+    connect();
+
+    return () => {
+      isClosed = true;
+      if (socket) {
+        socket.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, []);
 
   const resetForm = () => {
     setTitle('');
@@ -756,6 +925,13 @@ export default function EventsPage({ onNavigateAuth }) {
                     {selectedEvent.title}
                   </h1>
 
+                  {isFull && (
+                    <div className="mt-6 p-4 bg-[var(--color-alert)]/5 border border-[var(--color-alert)]/20 text-[var(--color-alert)] font-mono text-[10.5px] uppercase tracking-widest font-semibold flex items-center gap-2.5 select-none animate-fadeIn rounded-[4px]">
+                      <span className="w-2 h-2 rounded-full bg-[var(--color-alert)] animate-pulse flex-shrink-0" />
+                      This event is now full
+                    </div>
+                  )}
+
                   {selectedEvent.description ? (
                     <p className="font-sans text-base text-[var(--color-ink-muted)] mt-8 leading-relaxed max-w-[650px] whitespace-pre-line">
                       {selectedEvent.description}
@@ -843,14 +1019,12 @@ export default function EventsPage({ onNavigateAuth }) {
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                    <UsersIcon />
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-[var(--color-ink-muted)] font-mono uppercase tracking-wider font-semibold">Capacity Limit</span>
-                      <span className="text-sm font-mono mt-0.5">
-                        {selectedEvent.capacity} spots available
-                      </span>
-                    </div>
+                  <div className="w-full">
+                    <CapacityUrgencyGauge 
+                      currentCount={currentCount} 
+                      capacity={selectedEvent.capacity} 
+                      hasEnded={new Date(selectedEvent.start_time) < new Date()}
+                    />
                   </div>
 
                   {/* RSVP Actions Block */}
@@ -886,6 +1060,14 @@ export default function EventsPage({ onNavigateAuth }) {
                             className="w-full text-center font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 border border-[var(--color-alert)] text-[var(--color-alert)] hover:bg-[var(--color-alert)]/10 cursor-pointer rounded-[4px] disabled:opacity-50 transition-colors"
                           >
                             {rsvpLoading ? 'Leaving...' : 'Leave Event'}
+                          </button>
+                        ) : isFull ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="w-full text-center font-sans text-xs font-semibold uppercase tracking-wider py-3 px-4 bg-[var(--color-paper-alt)] text-[var(--color-ink-muted)] border border-[var(--color-hairline)] rounded-[4px] opacity-70 cursor-not-allowed select-none"
+                          >
+                            Event Full
                           </button>
                         ) : (
                           <button
@@ -1510,6 +1692,11 @@ export default function EventsPage({ onNavigateAuth }) {
                                 </p>
                               )}
 
+                              {/* Remaining Spots Banner */}
+                              <div className="mt-3 flex items-center gap-2">
+                                {renderSpotsBanner(event)}
+                              </div>
+
                               {/* Metadata Row using icons instead of text labels */}
                               <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">
                                 <span className="flex items-center gap-2">
@@ -1613,6 +1800,11 @@ export default function EventsPage({ onNavigateAuth }) {
                                   {event.description}
                                 </p>
                               )}
+
+                              {/* Remaining Spots Banner */}
+                              <div className="mt-3 flex items-center gap-2">
+                                {renderSpotsBanner(event)}
+                              </div>
 
                               {/* Metadata Row using icons instead of text labels */}
                               <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">
@@ -1721,6 +1913,11 @@ export default function EventsPage({ onNavigateAuth }) {
                                   {event.description}
                                 </p>
                               )}
+
+                              {/* Remaining Spots Banner */}
+                              <div className="mt-3 flex items-center gap-2">
+                                {renderSpotsBanner(event)}
+                              </div>
 
                               {/* Metadata Row using icons instead of text labels */}
                               <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">

@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:8001/api/auth';
+const BASE_URL = `http://${window.location.hostname}:8001/api/auth`;
 
 /**
  * Parses error responses from the backend API and converts them into user-friendly strings.

@@ -52,3 +52,40 @@ body {
 .animate-fadeIn {
   animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+@keyframes ws-rotate-clockwise {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ws-pulse-glow {
+  0%, 100% {
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes ws-pulse-border {
+  0%, 100% {
+    border-color: var(--color-hairline);
+  }
+  50% {
+    border-color: var(--color-alert);
+  }
+}
+
+@keyframes ws-flicker {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+

@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:8003/api/rsvp';
+const BASE_URL = `http://${window.location.hostname}:8003/api/rsvp`;
 
 /**
  * Parses error responses from the backend RSVP API.
@@ -113,3 +113,24 @@ export async function getMyEvents(token) {
 
   return response.json();
 }
+
+/**
+ * Fetches current RSVP count for a specific event.
+ * @param {number|string} eventId
+ */
+export async function getEventRsvpCount(eventId) {
+  const response = await fetch(`${BASE_URL}/${eventId}/count`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errors = await parseError(response);
+    throw errors;
+  }
+
+  return response.json();
+}
+
