@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-q107bqnd!6#9@8au-7-uk&tln&tzq=e^2n6wu8@pnqgo)dj*my
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -40,7 +40,6 @@ INSTALLED_APPS = [
     
     'rest_framework',
     'corsheaders',
-    'django_elasticsearch_dsl',
     'events',
 ]
 
@@ -122,13 +121,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-# Elasticsearch Configuration
-# https://django-elasticsearch-dsl.readthedocs.io/en/latest/quickstart.html
-ELASTICSEARCH_DSL = {
-    'default': {
-        'hosts': 'http://localhost:9200'
-    },
-}
+
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -141,6 +134,4 @@ SIMPLE_JWT = {
     'ALGORITHM': 'HS256',
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
+CORS_ALLOW_ALL_ORIGINS = True

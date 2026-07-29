@@ -1,8 +1,10 @@
+import os
 import grpc
 from . import auth_pb2
 from . import auth_pb2_grpc
 
-AUTH_GRPC_ADDRESS = "localhost:50051"
+AUTH_GRPC_HOST = os.environ.get('AUTH_GRPC_HOST', 'localhost')
+AUTH_GRPC_ADDRESS = f"{AUTH_GRPC_HOST}:50051"
 
 
 def verify_token(token: str):
