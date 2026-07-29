@@ -1,12 +1,34 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { fetchEvents, createEvent, updateEvent, fetchEventDetail, deleteEvent } from '../api/events';
+import { fetchEvents, createEvent, updateEvent, fetchEventDetail, deleteEvent, searchEvents } from '../api/events';
 import { getRsvpStatus, joinEvent, leaveEvent, getMyEvents, getEventRsvpCount } from '../api/rsvp';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import { useEventSocket } from '../hooks/useEventSocket';
 import { AnimatedCounter } from '../components/AnimatedCounter';
 import { CapacityUrgencyGauge } from '../components/CapacityUrgencyGauge';
+
+import greenSpiky from '../assets/metups-characters/Green spiky.png';
+import blob from '../assets/metups-characters/blob.png';
+import flow from '../assets/metups-characters/flow.png';
+import ghoast from '../assets/metups-characters/ghoast.png';
+import hot from '../assets/metups-characters/hot.png';
+import pokoe from '../assets/metups-characters/pokoe.png';
+import purppler from '../assets/metups-characters/purppler.png';
+import sloopy from '../assets/metups-characters/sloopy.png';
+import star from '../assets/metups-characters/star.png';
+
+const CHARACTER_IMGS = {
+  'green-spiky': greenSpiky,
+  'blob': blob,
+  'flow': flow,
+  'ghoast': ghoast,
+  'hot': hot,
+  'pokoe': pokoe,
+  'purppler': purppler,
+  'sloopy': sloopy,
+  'star': star
+};
 
 // SVG Icons
 const MapPinIcon = () => (
@@ -34,7 +56,7 @@ const ClockIcon = () => (
   </svg>
 );
 
-export default function EventsPage({ onNavigateAuth }) {
+export default function EventsPage({ onNavigateAuth, onNavigateHome }) {
   const { user, accessToken, logout } = useAuth();
   const calendarRef = useRef(null);
   const profileMenuRef = useRef(null);
@@ -43,6 +65,40 @@ export default function EventsPage({ onNavigateAuth }) {
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+
+  // Debounced search logic
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed === '') {
+      setSearchResults([]);
+      setSearchError('');
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError('');
+
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const data = await searchEvents(trimmed);
+        setSearchResults(data.results || []);
+      } catch (err) {
+        console.error("Search query failure:", err);
+        setSearchError(err.non_field_errors || 'Search request failed.');
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 400); // 400ms debounce
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
 
   // Single event detail screen state
   const [selectedEventId, setSelectedEventId] = useState(null);
@@ -62,6 +118,20 @@ export default function EventsPage({ onNavigateAuth }) {
   const [myEventsError, setMyEventsError] = useState('');
   const [initialCount, setInitialCount] = useState(0);
   const [rsvpCounts, setRsvpCounts] = useState({});
+
+  // Clear search query and results when changing tabs
+  useEffect(() => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchError('');
+  }, [viewMode]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset page pagination index on filter/tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, viewMode]);
 
   const { currentCount, isFull } = useEventSocket(
     selectedEventId,
@@ -799,7 +869,16 @@ export default function EventsPage({ onNavigateAuth }) {
       <header className="sticky top-0 w-full border-b border-[var(--color-hairline)] py-4 px-6 md:px-12 flex justify-between items-center select-none bg-[var(--color-paper)]/95 backdrop-blur-[4px] z-40 transition-colors duration-200">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => { setSelectedEventId(null); handleCancelEdit(); setIsCreating(false); setViewMode('all'); }}
+            onClick={() => {
+              if (onNavigateHome) {
+                onNavigateHome();
+              } else {
+                setSelectedEventId(null);
+                handleCancelEdit();
+                setIsCreating(false);
+                setViewMode('all');
+              }
+            }}
             className="font-display text-2xl m-0 tracking-tight font-semibold bg-transparent border-none cursor-pointer text-[var(--color-ink)]"
           >
             MetUps
@@ -844,9 +923,13 @@ export default function EventsPage({ onNavigateAuth }) {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="flex items-center gap-2 border border-[var(--color-hairline)] bg-[var(--color-paper-alt)]/40 hover:bg-[var(--color-paper-alt)] py-1.5 pl-2 pr-3 rounded-full cursor-pointer transition-colors duration-150"
               >
-                {/* Dummy Avatar Circle */}
-                <div className="w-6 h-6 rounded-full bg-[var(--color-presence)] text-[var(--color-paper)] flex items-center justify-center font-mono text-[10px] font-bold uppercase select-none">
-                  {user.username.slice(0, 1)}
+                {/* Chosen Character Avatar */}
+                <div className="w-6 h-6 border border-[var(--color-ink)] bg-[var(--color-paper)] flex items-center justify-center overflow-hidden rotate-[2deg] hover:rotate-0 transition-transform">
+                  <img 
+                    src={CHARACTER_IMGS[user.characterId] || CHARACTER_IMGS['star']} 
+                    alt="" 
+                    className="w-5 h-5 object-contain filter drop-shadow-[0.5px_0.5px_0px_var(--color-ink)]"
+                  />
                 </div>
                 <span className="font-mono text-xs text-[var(--color-ink)] font-semibold uppercase tracking-wider">
                   {user.username}
@@ -1618,6 +1701,43 @@ export default function EventsPage({ onNavigateAuth }) {
 
               <div className={`${isFormOpen ? 'lg:col-span-3' : 'lg:col-span-5'} w-full transition-all duration-300`}>
                 
+                {/* Search Bar */}
+                {viewMode === 'all' && (
+                  <div className="mb-8 flex flex-col gap-2">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search events by title, description, or location..."
+                        className="w-full px-4 py-3 border-2 border-[var(--color-ink)] bg-[var(--color-paper)] font-sans text-sm text-[var(--color-ink)] placeholder-[var(--color-ink-muted)]/70 transition-all duration-150 focus:bg-[var(--color-paper-alt)] focus:outline-none"
+                      />
+                      {searchLoading ? (
+                        <div className="absolute right-4 top-3.5 flex items-center gap-1.5 select-none">
+                          <svg className="animate-spin h-4 w-4 text-[var(--color-presence)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--color-presence)]">Searching...</span>
+                        </div>
+                      ) : searchQuery.trim() !== '' && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-4 top-3.5 text-xs font-mono uppercase tracking-wider text-[var(--color-alert)] hover:text-[var(--color-ink)] cursor-pointer bg-transparent border-none"
+                        >
+                          Clear [x]
+                        </button>
+                      )}
+                    </div>
+                    {searchError && (
+                      <span className="text-2xs font-mono text-[var(--color-alert)] uppercase tracking-wider select-none animate-charSlide">
+                        ⚠️ {searchError}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {viewMode === 'mine' ? (
                   myEventsLoading ? (
                     <div className="py-24 text-center select-none">
@@ -1829,119 +1949,217 @@ export default function EventsPage({ onNavigateAuth }) {
                     </div>
                   )
                 ) : (
-                  isLoading ? (
-                    <div className="py-24 text-center select-none">
-                      <svg className="animate-spin h-6 w-6 text-[var(--color-presence)] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <p className="font-sans text-xs uppercase tracking-wider text-[var(--color-ink-muted)]">Retrieving entries...</p>
-                    </div>
-                  ) : fetchError ? (
-                    <div className="py-20 text-center select-none">
-                      <p className="font-sans text-sm text-[var(--color-alert)]">{fetchError}</p>
-                      <button
-                        onClick={loadEventsList}
-                        className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer"
-                      >
-                        Force reload
-                      </button>
-                    </div>
-                  ) : events.filter(e => new Date(e.start_time) >= new Date()).length === 0 ? (
-                    <div className="py-24 border border-[var(--color-hairline)] border-dashed text-center select-none">
-                      <p className="font-sans text-sm text-[var(--color-ink-muted)]">No entries registered in the catalog.</p>
-                      {user && (
-                        <button
-                          onClick={handleCreateToggle}
-                          className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer"
-                        >
-                          Draft first event
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col border-t border-[var(--color-hairline)] animate-fadeIn">
-                      {events.filter(e => new Date(e.start_time) >= new Date()).map((event) => {
-                        const { day, month, time } = parseEventDate(event.start_time);
-                        const isOwner = user && String(user.id) === String(event.created_by);
+                  // "All Events / Catalog" view mode
+                  (() => {
+                    const isSearchActive = searchQuery.trim() !== '';
+                    const filteredEvents = isSearchActive 
+                      ? searchResults 
+                      : events.filter(e => new Date(e.start_time) >= new Date());
 
-                        return (
-                          <div 
-                            key={event.id}
-                            className="flex border-b border-[var(--color-hairline)] py-8 md:py-10 items-start gap-6 md:gap-8 hover:bg-[var(--color-paper-alt)]/25 transition-colors duration-150 cursor-pointer"
-                            onClick={() => setSelectedEventId(event.id)}
+                    const EVENTS_PER_PAGE = 4;
+                    const totalPages = Math.ceil(filteredEvents.length / EVENTS_PER_PAGE);
+                    const paginatedEvents = filteredEvents.slice(
+                      (currentPage - 1) * EVENTS_PER_PAGE,
+                      currentPage * EVENTS_PER_PAGE
+                    );
+
+                    if (isLoading) {
+                      return (
+                        <div className="py-24 text-center select-none">
+                          <svg className="animate-spin h-6 w-6 text-[var(--color-presence)] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <p className="font-sans text-xs uppercase tracking-wider text-[var(--color-ink-muted)]">Retrieving entries...</p>
+                        </div>
+                      );
+                    }
+
+                    if (fetchError && !isSearchActive) {
+                      return (
+                        <div className="py-20 text-center select-none">
+                          <p className="font-sans text-sm text-[var(--color-alert)]">{fetchError}</p>
+                          <button
+                            onClick={loadEventsList}
+                            className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer"
                           >
-                            {/* Left Side: Date stamp */}
-                            <div className="flex flex-col items-center justify-center min-w-[60px] select-none text-center">
-                              <span className="font-display text-4xl font-semibold text-[var(--color-presence)] leading-none tracking-tighter">
-                                {day}
-                              </span>
-                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-widest mt-2 uppercase font-semibold">
-                                {month}
-                              </span>
-                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] mt-1 opacity-70">
-                                {time.split(' ')[0]}
-                              </span>
-                              <span className="font-mono text-[9px] text-[var(--color-ink-muted)] opacity-50 uppercase">
-                                {time.split(' ')[1]}
-                              </span>
-                            </div>
+                            Force reload
+                          </button>
+                        </div>
+                      );
+                    }
 
-                            {/* Structural vertical divider */}
-                            <div className="w-[1px] self-stretch bg-[var(--color-hairline)]" onClick={(e) => e.stopPropagation()}></div>
-
-                            {/* Details */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start gap-4">
-                                <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
-                                  {event.title}
-                                </h3>
-                                {isOwner && new Date(event.start_time) >= new Date() && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEditInit(event);
-                                    }}
-                                    className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none bg-transparent"
-                                  >
-                                    Edit
-                                  </button>
-                                )}
-                              </div>
-                              
-                              {event.description && (
-                                <p className="font-sans text-sm text-[var(--color-ink-muted)] mt-2.5 leading-relaxed max-w-[600px] truncate">
-                                  {event.description}
-                                </p>
-                              )}
-
-                              {/* Remaining Spots Banner */}
-                              <div className="mt-3 flex items-center gap-2">
-                                {renderSpotsBanner(event)}
-                              </div>
-
-                              {/* Metadata Row using icons instead of text labels */}
-                              <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">
-                                <span className="flex items-center gap-2">
-                                  <MapPinIcon />
-                                  <span className="text-[var(--color-ink)] font-medium font-sans">{event.location}</span>
-                                </span>
-                                <span className="flex items-center gap-2">
-                                  <UsersIcon />
-                                  <span className="font-mono text-[var(--color-ink)]">{event.capacity}</span>
-                                </span>
-                                <span className="flex items-center gap-2">
-                                  <ClockIcon />
-                                  <span className="font-mono text-[var(--color-ink)]">{time}</span>
-                                </span>
-                              </div>
-                            </div>
-
+                    if (filteredEvents.length === 0) {
+                      if (isSearchActive) {
+                        return (
+                          <div className="py-24 border border-[var(--color-hairline)] border-dashed text-center select-none bg-[var(--color-paper-alt)]/20 animate-fadeIn">
+                            <p className="font-sans text-sm text-[var(--color-ink-muted)]">
+                              No events found matching "<strong className="font-semibold text-[var(--color-ink)]">{searchQuery}</strong>"
+                            </p>
+                            <button
+                              onClick={() => setSearchQuery('')}
+                              className="mt-4 text-xs font-mono uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-alert)] cursor-pointer bg-transparent border-none"
+                            >
+                              Reset Search View
+                            </button>
                           </div>
                         );
-                      })}
-                    </div>
-                  )
+                      } else {
+                        return (
+                          <div className="py-24 border border-[var(--color-hairline)] border-dashed text-center select-none">
+                            <p className="font-sans text-sm text-[var(--color-ink-muted)]">No entries registered in the catalog.</p>
+                            {user && (
+                              <button
+                                onClick={handleCreateToggle}
+                                className="mt-4 text-xs font-semibold uppercase tracking-wider underline text-[var(--color-ink)] hover:text-[var(--color-presence)] cursor-pointer"
+                              >
+                                Draft first event
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                    }
+
+                    return (
+                      <div className="flex flex-col border-t border-[var(--color-hairline)] animate-fadeIn">
+                        {paginatedEvents.map((event) => {
+                          const { day, month, time } = parseEventDate(event.start_time);
+                          const isOwner = user && String(user.id) === String(event.created_by);
+
+                          return (
+                            <div 
+                              key={event.id}
+                              className="flex border-b border-[var(--color-hairline)] py-8 md:py-10 items-start gap-6 md:gap-8 hover:bg-[var(--color-paper-alt)]/25 transition-colors duration-150 cursor-pointer"
+                              onClick={() => setSelectedEventId(event.id)}
+                            >
+                              {/* Left Side: Date stamp */}
+                              <div className="flex flex-col items-center justify-center min-w-[60px] select-none text-center">
+                                <span className="font-display text-4xl font-semibold text-[var(--color-presence)] leading-none tracking-tighter">
+                                  {day}
+                                </span>
+                                <span className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-widest mt-2 uppercase font-semibold">
+                                  {month}
+                                </span>
+                                <span className="font-mono text-[9px] text-[var(--color-ink-muted)] mt-1 opacity-70">
+                                  {time.split(' ')[0]}
+                                </span>
+                                <span className="font-mono text-[9px] text-[var(--color-ink-muted)] opacity-50 uppercase">
+                                  {time.split(' ')[1]}
+                                </span>
+                              </div>
+
+                              {/* Structural vertical divider */}
+                              <div className="w-[1px] self-stretch bg-[var(--color-hairline)]" onClick={(e) => e.stopPropagation()}></div>
+
+                              {/* Details */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start gap-4">
+                                  <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
+                                    {event.title}
+                                  </h3>
+                                  {new Date(event.start_time) >= new Date() && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditInit(event);
+                                      }}
+                                      className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none bg-transparent"
+                                    >
+                                      Edit
+                                    </button>
+                                  )}
+                                </div>
+                                
+                                {event.description && (
+                                  <p className="font-sans text-sm text-[var(--color-ink-muted)] mt-2.5 leading-relaxed max-w-[600px] truncate">
+                                    {event.description}
+                                  </p>
+                                )}
+
+                                {/* Remaining Spots Banner */}
+                                <div className="mt-3 flex items-center gap-2">
+                                  {renderSpotsBanner(event)}
+                                </div>
+
+                                {/* Metadata Row using icons instead of text labels */}
+                                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px] text-[var(--color-ink-muted)] select-none">
+                                  <span className="flex items-center gap-2">
+                                    <MapPinIcon />
+                                    <span className="text-[var(--color-ink)] font-medium font-sans">{event.location}</span>
+                                  </span>
+                                  <span className="flex items-center gap-2">
+                                    <UsersIcon />
+                                    <span className="font-mono text-[var(--color-ink)]">{event.capacity}</span>
+                                  </span>
+                                  <span className="flex items-center gap-2">
+                                    <ClockIcon />
+                                    <span className="font-mono text-[var(--color-ink)]">{time}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Newspaper Style Pagination Footer */}
+                        {totalPages > 1 && (
+                          <div className="mt-12 border-4 border-[var(--color-ink)] bg-[var(--color-paper-alt)] grid grid-cols-1 md:grid-cols-3 select-none text-center md:text-left font-mono">
+                            
+                            {/* Tracker */}
+                            <div className="p-4 border-b-2 md:border-b-0 md:border-r-2 border-[var(--color-ink)] flex items-center justify-center md:justify-start">
+                              <span className="text-2xs uppercase tracking-widest text-[var(--color-ink-muted)]">
+                                INDEX: SHEET {String(currentPage).padStart(2, '0')} / {String(totalPages).padStart(2, '0')}
+                              </span>
+                            </div>
+                            
+                            {/* Sheet Selectors */}
+                            <div className="p-4 border-b-2 md:border-b-0 md:border-r-2 border-[var(--color-ink)] flex items-center justify-center space-x-2">
+                              {Array.from({ length: totalPages }, (_, i) => {
+                                const pageNum = i + 1;
+                                const isCurrent = pageNum === currentPage;
+                                return (
+                                  <button
+                                    key={pageNum}
+                                    type="button"
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className={`px-2.5 py-1 border-2 border-[var(--color-ink)] text-2xs font-bold uppercase transition-all cursor-pointer ${
+                                      isCurrent
+                                        ? 'bg-[var(--color-signal)] text-[var(--color-ink)] rotate-[-2deg] scale-105'
+                                        : 'bg-[var(--color-paper)] hover:bg-[var(--color-paper-alt)]'
+                                    }`}
+                                  >
+                                    SH. {String(pageNum).padStart(2, '0')}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            
+                            {/* Next/Prev Navigation */}
+                            <div className="p-4 flex items-center justify-center md:justify-end space-x-4">
+                              <button
+                                type="button"
+                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-4 py-1.5 border-2 border-[var(--color-ink)] bg-[var(--color-paper)] text-2xs uppercase tracking-wider font-bold hover:bg-[var(--color-paper-alt)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer active:translate-y-[1px]"
+                              >
+                                ← BACK
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-4 py-1.5 border-2 border-[var(--color-ink)] bg-[var(--color-paper)] text-2xs uppercase tracking-wider font-bold hover:bg-[var(--color-paper-alt)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer active:translate-y-[1px]"
+                              >
+                                NEXT →
+                              </button>
+                            </div>
+                            
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
 

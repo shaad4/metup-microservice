@@ -136,3 +136,26 @@ export async function deleteEvent(eventId, token) {
   }
   return response.json();
 }
+
+/**
+ * Searches events based on query string.
+ * @param {string} query
+ */
+export async function searchEvents(query) {
+  if (!query || query.trim() === '') {
+    return { count: 0, results: [] };
+  }
+  const response = await fetch(`${BASE_URL}/search/?q=${encodeURIComponent(query)}`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errors = await parseError(response);
+    throw errors;
+  }
+
+  return response.json();
+}

@@ -34,6 +34,15 @@ export function AuthProvider({ children }) {
     setAccessTokenState(token);
   };
 
+  const getDeterministicChar = (name) => {
+    const chars = ['green-spiky', 'blob', 'flow', 'ghoast', 'hot', 'pokoe', 'purppler', 'sloopy', 'star'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return chars[Math.abs(hash) % chars.length];
+  };
+
   const login = async (username, password) => {
     try {
       const data = await loginUser(username, password);
@@ -48,7 +57,8 @@ export function AuthProvider({ children }) {
         console.error('Failed to decode JWT payload:', e);
       }
 
-      const userInfo = { id: userId, username };
+      const characterId = localStorage.getItem(`metups_char_${username}`) || getDeterministicChar(username);
+      const userInfo = { id: userId, username, characterId };
       setUser(userInfo);
       localStorage.setItem('metups_user', JSON.stringify(userInfo));
       console.log('Login successful. Session persisted.');
@@ -59,7 +69,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const register = async (username, email, password) => {
+  const register = async (username, email, password, characterId) => {
     try {
       const data = await registerUser(username, email, password);
       setAccessToken(data.access);
@@ -74,9 +84,15 @@ export function AuthProvider({ children }) {
         } catch (e) {}
       }
 
-      const userInfo = { id: userId, username };
+      const finalCharId = characterId || getDeterministicChar(username);
+      const userInfo = { id: userId, username, characterId: finalCharId };
       setUser(userInfo);
       localStorage.setItem('metups_user', JSON.stringify(userInfo));
+      
+      if (finalCharId) {
+        localStorage.setItem(`metups_char_${username}`, finalCharId);
+      }
+
       console.log('Registration successful. Session persisted.');
       return { success: true };
     } catch (errors) {
