@@ -1,0 +1,141 @@
+services:
+  # ---------- Infra ----------
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  # ---------- Auth Service ----------
+  auth-django:
+    build: ./auth-service
+    restart: on-failure
+    command: python manage.py runserver 0.0.0.0:8001
+    volumes:
+      - ./auth-service:/app
+    ports:
+      - "8001:8001"
+    environment:
+      - SECRET_KEY=${AUTH_SECRET_KEY}
+
+  auth-grpc:
+    build: ./auth-service
+    restart: on-failure
+    command: python grpc_server/server.py
+    volumes:
+      - ./auth-service:/app
+    environment:
+      - SECRET_KEY=${AUTH_SECRET_KEY}
+
+  # ---------- Event Service ----------
+  event-django:
+    build: ./event-service
+    restart: on-failure
+    command: python manage.py runserver 0.0.0.0:8002
+    volumes:
+      - ./event-service:/app
+    ports:
+      - "8002:8002"
+    environment:
+      - SECRET_KEY=${EVENT_SECRET_KEY}
+      - REDIS_HOST=redis
+      - AUTH_GRPC_HOST=auth-grpc
+    depends_on:
+      - redis
+      - auth-grpc
+
+  event-grpc:
+    build: ./event-service
+    restart: on-failure
+    command: python grpc_server/server.py
+    volumes:
+      - ./event-service:/app
+    environment:
+      - SECRET_KEY=${EVENT_SECRET_KEY}
+      - AUTH_GRPC_HOST=auth-grpc
+    depends_on:
+      - auth-grpc
+
+  # ---------- RSVP Service ----------
+  rsvp-django:
+    build: ./rsvp-service
+    restart: on-failure
+    command: python manage.py runserver 0.0.0.0:8003
+    volumes:
+      - ./rsvp-service:/app
+    ports:
+      - "8003:8003"
+    environment:
+      - AUTH_GRPC_HOST=auth-grpc
+      - EVENT_GRPC_HOST=event-grpc
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      - auth-grpc
+      - event-grpc
+      - rabbitmq
+
+  # ---------- Notification Service ----------
+  notif-django:
+    build: ./notification-service
+    restart: on-failure
+    command: python manage.py runserver 0.0.0.0:8004
+    volumes:
+      - ./notification-service:/app
+    ports:
+      - "8004:8004"
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - REDIS_HOST=redis
+
+  notif-asgi:
+    build: ./notification-service
+    restart: on-failure
+    command: daphne -b 0.0.0.0 -p 8005 notification_service.asgi:application
+    volumes:
+      - ./notification-service:/app
+    ports:
+      - "8005:8005"
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+
+  notif-celery:
+    build: ./notification-service
+    restart: on-failure
+    command: celery -A notification_service worker --loglevel=info
+    volumes:
+      - ./notification-service:/app
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - REDIS_HOST=redis
+    depends_on:
+      - rabbitmq
+      - redis
+
+  notif-bridge:
+    build: ./notification-service
+    restart: on-failure
+    command: python manage.py consume_notifications
+    volumes:
+      - ./notification-service:/app
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      - rabbitmq
+      - notif-celery
+
+  # ---------- Frontend ----------
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
