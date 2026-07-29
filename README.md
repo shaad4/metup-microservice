@@ -42,8 +42,9 @@ graph TD
         NotifCelery -->|Send Email| Gmail[Google SMTP / Mailer]
     end
 
-    subgraph Caching
+    subgraph Caching & Search Indexing
         EventDjango <--> Redis
+        EventDjango <-->|Sync & Query| ES[Elasticsearch Engine]
     end
 ```
 
@@ -66,6 +67,16 @@ graph TD
 | **notif-bridge**| Python command daemon | `notif-bridge` | N/A | N/A | Connects RabbitMQ events to Celery |
 | **redis** | Redis (Alpine) | `redis` | 6379 | N/A | Celery broker, cache, Channels backplane |
 | **rabbitmq** | RabbitMQ + Management UI | `rabbitmq` | 5672 / 15672 | N/A | Inter-service message broker |
+| **elasticsearch**| Elasticsearch 8.19.19 | `elasticsearch` | 9200 | N/A | Search engine backing event search |
+
+---
+
+## 💾 Data Persistence & Storage
+
+MetUps employs a hybrid persistence model to support microservice isolation and search performance:
+- **Isolated SQLite Databases:** Each service container manages its own state using local SQLite database files (e.g., `auth-service/db.sqlite3`, `event-service/db.sqlite3`). These are bind-mounted directly, preserving development records across container updates.
+- **Persistent Elasticsearch Indexes:** To persist Elasticsearch indices between runs, a named Docker volume (`es_data`) is mapped to `/usr/share/elasticsearch/data` in the `elasticsearch` container.
+- **Volatile Caching:** Redis caches are volatile and live entirely in-memory.
 
 ---
 
@@ -78,6 +89,9 @@ graph TD
 ### 📅 2. Event Service
 - Manages meetup details, locations, schedules, and maximum attendee capacities.
 - Implements a caching layer using **Redis** to store and serve high-traffic endpoints (`/api/events/` lists and details) with a TTL of 60 seconds. Caches are dynamically invalidated when events are modified or created.
+- Integrates with **Elasticsearch** (via `django-elasticsearch-dsl` & `Elasticsearch 8.19.19` container on port `9200`) to support high-performance full-text search:
+  - Indexes event attributes (`title`, `description`, `location`) in real-time on database writes/updates.
+  - Exposes `/api/events/search/?q={query}` supporting debounced autocomplete and search-as-you-type prefix matching via Elasticsearch `phrase_prefix` multi-match queries.
 
 ### ✍️ 3. RSVP Service
 - Handles the core business logic of joining and leaving meetups.
@@ -116,7 +130,7 @@ Bring up the entire suite of services in detached mode:
 docker compose up -d
 ```
 
-Confirm that all **13 containers** are up and healthy:
+Confirm that all **14 containers** are up and healthy:
 ```bash
 docker compose ps
 ```
@@ -128,6 +142,12 @@ docker compose exec auth-django python manage.py migrate
 docker compose exec event-django python manage.py migrate
 docker compose exec rsvp-django python manage.py migrate
 docker compose exec notif-django python manage.py migrate
+```
+
+### Step 4: Populate/Rebuild Search Index (Optional)
+If you need to initialize or rebuild the Elasticsearch search index from the SQLite database:
+```bash
+docker compose exec event-django python manage.py search_index --rebuild -f
 ```
 
 ---
