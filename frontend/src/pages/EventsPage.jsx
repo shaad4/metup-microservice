@@ -56,6 +56,12 @@ const ClockIcon = () => (
   </svg>
 );
 
+const EditIcon = () => (
+  <svg className="w-3.5 h-3.5 text-current flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+  </svg>
+);
+
 export default function EventsPage({ onNavigateAuth, onNavigateHome }) {
   const { user, accessToken, logout } = useAuth();
   const calendarRef = useRef(null);
@@ -1031,9 +1037,10 @@ export default function EventsPage({ onNavigateAuth, onNavigateHome }) {
                     <div className="mt-10 pt-6 border-t border-[var(--color-hairline)] flex items-center gap-3">
                       <button
                         onClick={() => handleEditInit(selectedEvent)}
-                        className="font-sans text-xs font-semibold uppercase tracking-wider py-2.5 px-4 rounded-[4px] border border-[var(--color-ink)] hover:bg-[var(--color-paper-alt)] cursor-pointer transition-all duration-150"
+                        title="Edit event"
+                        className="p-2.5 rounded-[4px] border border-[var(--color-ink)] hover:bg-[var(--color-paper-alt)] cursor-pointer text-[var(--color-ink)] flex items-center justify-center transition-all duration-150 select-none bg-transparent"
                       >
-                        Edit this event
+                        <EditIcon />
                       </button>
                       {showDeleteConfirm ? (
                         <div className="flex items-center gap-2">
@@ -1903,15 +1910,16 @@ export default function EventsPage({ onNavigateAuth, onNavigateHome }) {
                                 <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
                                   {event.title}
                                 </h3>
-                                {new Date(event.start_time) >= new Date() && (
+                                {user && String(user.id) === String(event.created_by) && new Date(event.start_time) >= new Date() && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleEditInit(event);
                                     }}
-                                    className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none bg-transparent"
+                                    title="Edit event"
+                                    className="p-1.5 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] hover:bg-[var(--color-paper-alt)] cursor-pointer text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] flex items-center justify-center transition-all duration-150 select-none bg-transparent"
                                   >
-                                    Edit
+                                    <EditIcon />
                                   </button>
                                 )}
                               </div>
@@ -2058,15 +2066,16 @@ export default function EventsPage({ onNavigateAuth, onNavigateHome }) {
                                   <h3 className="font-display text-xl font-semibold text-[var(--color-ink)] m-0 leading-snug hover:underline">
                                     {event.title}
                                   </h3>
-                                  {new Date(event.start_time) >= new Date() && (
+                                  {isOwner && new Date(event.start_time) >= new Date() && (
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleEditInit(event);
                                       }}
-                                      className="text-[10px] font-semibold uppercase tracking-wider py-1 px-3 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] cursor-pointer font-sans transition-all duration-150 select-none bg-transparent"
+                                      title="Edit event"
+                                      className="p-1.5 rounded-[4px] border border-[var(--color-hairline)] hover:border-[var(--color-ink)] hover:bg-[var(--color-paper-alt)] cursor-pointer text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] flex items-center justify-center transition-all duration-150 select-none bg-transparent"
                                     >
-                                      Edit
+                                      <EditIcon />
                                     </button>
                                   )}
                                 </div>
