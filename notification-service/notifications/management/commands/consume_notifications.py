@@ -2,6 +2,8 @@ import os
 import django
 import json
 import pika
+import time
+import socket
 from datetime import timedelta
 from dateutil import parser as dateparser
 from django.core.management.base import BaseCommand
@@ -20,7 +22,22 @@ class Command(BaseCommand):
     help = "Consume RabbitMQ messages and dispatch Celery tasks"
 
     def handle(self, *args, **options):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+        self.stdout.write(f"Connecting to RabbitMQ at {RABBITMQ_HOST}...")
+        connection = None
+        retries = 15
+        for i in range(retries):
+            try:
+                connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+                self.stdout.write("Successfully connected to RabbitMQ.")
+                break
+            except (pika.exceptions.AMQPConnectionError, socket.gaierror) as e:
+                self.stdout.write(f"RabbitMQ connection failed ({e}). Retrying in 5 seconds... ({i+1}/{retries})")
+                time.sleep(5)
+
+        if not connection:
+            self.stderr.write("Failed to connect to RabbitMQ. Exiting.")
+            return
+
         channel = connection.channel()
         channel.queue_declare(queue=QUEUE_NAME, durable=True)
 
