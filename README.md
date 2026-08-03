@@ -37,6 +37,7 @@ graph TD
         RSVPService -->|Publish event| RabbitMQ[RabbitMQ Broker]
         RabbitMQ -->|Consume event| NotifBridge[Notification Bridge]
         NotifBridge -->|Queue Celery Task| Redis[Redis Broker & Channel Layer]
+        NotifBeat[Celery Beat Scheduler] -->|Dispatch Periodic Tasks| Redis
         NotifCelery[Celery Worker] <--> Redis
         NotifCelery -->|Trigger WS Broadcast| NotifASGI
         NotifCelery -->|Send Email| Gmail[Google SMTP / Mailer]
@@ -64,6 +65,7 @@ graph TD
 | **notif-django**| Python + Django REST | `notif-django` | 8004 | `/api/notifications/` | Notification templates & user settings |
 | **notif-asgi** | Daphne (ASGI Server) | `notif-asgi` | 8005 | `/ws/` | WebSockets server for live updates |
 | **notif-celery**| Celery Worker | `notif-celery` | N/A | N/A | Asynchronous task processor (emails/pushes) |
+| **notif-beat**  | Celery Beat Scheduler | `notif-beat` | N/A | N/A | Periodic task scheduler (reminders) |
 | **notif-bridge**| Python command daemon | `notif-bridge` | N/A | N/A | Connects RabbitMQ events to Celery |
 | **redis** | Redis (Alpine) | `redis` | 6379 | N/A | Celery broker, cache, Channels backplane |
 | **rabbitmq** | RabbitMQ + Management UI | `rabbitmq` | 5672 / 15672 | N/A | Inter-service message broker |
@@ -99,10 +101,11 @@ MetUps employs a hybrid persistence model to support microservice isolation and 
 - On success, it publishes JSON events to **RabbitMQ** (e.g., `user_joined_event`, `user_left_event`, `event_full`).
 
 ### 🔔 4. Real-Time Notification Service
-- Built with a modular, highly decoupled design:
-  - **Daphne (ASGI)**: Manages incoming WebSocket requests from the frontend client to push live capacity/attendee counters.
-  - **Bridge (`notif-bridge`)**: Runs a persistent Python consumer loop listening to RabbitMQ. When it receives an RSVP event, it dispatches corresponding background tasks to Celery.
-  - **Celery Worker**: Asynchronously triggers email confirmations (via Google SMTP) and broadcasts live JSON payload packets back to the ASGI WebSocket clients using Redis as the backplane.
+  - Built with a modular, highly decoupled design:
+    - **Daphne (ASGI)**: Manages incoming WebSocket requests from the frontend client to push live capacity/attendee counters.
+    - **Bridge (`notif-bridge`)**: Runs a persistent Python consumer loop listening to RabbitMQ. When it receives an RSVP event, it stores a reminder in the local SQLite database.
+    - **Celery Beat (`notif-beat`)**: Runs a periodic scheduler that wakes up every 5 minutes to scan the database for upcoming reminders and dispatches reminder email tasks.
+    - **Celery Worker**: Asynchronously triggers email confirmations and reminders (via Google SMTP) and broadcasts live JSON payload packets back to the ASGI WebSocket clients using Redis as the backplane.
 
 ---
 
@@ -130,7 +133,7 @@ Bring up the entire suite of services in detached mode:
 docker compose up -d
 ```
 
-Confirm that all **14 containers** are up and healthy:
+Confirm that all **15 containers** are up and healthy:
 ```bash
 docker compose ps
 ```
