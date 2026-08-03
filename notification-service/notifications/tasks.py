@@ -9,8 +9,10 @@ EVENT_SERVICE_URL = os.environ.get("EVENT_SERVICE_URL", "http://localhost:8002")
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone
+from datetime import timedelta
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from notifications.models import Reminder
 
 
 @shared_task
@@ -195,3 +197,27 @@ def send_event_reminder_email(user_email, event_title, event_id=None):
     msg.send()
 
     print(f"[EMAIL] HTML reminder email sent to {user_email} for event {event_id}")
+
+
+@shared_task
+def check_and_send_reminders():
+    now = timezone.now()
+    upcoming_limit = now + timedelta(hours=24)
+    # Query for unsent reminders starting in the next 24 hours (and in the future)
+    reminders = Reminder.objects.filter(
+        sent=False,
+        event_start_time__lte=upcoming_limit,
+        event_start_time__gt=now
+    )
+    for reminder in reminders:
+        # Avoid race conditions by marking sent first
+        reminder.sent = True
+        reminder.save(update_fields=['sent'])
+
+        # Dispatch the email task immediately
+        send_event_reminder_email.delay(
+            user_email=reminder.user_email,
+            event_title=reminder.event_title,
+            event_id=reminder.event_id
+        )
+        print(f"[SCHEDULER] Dispatched reminder for {reminder.user_email} (event {reminder.event_id})")

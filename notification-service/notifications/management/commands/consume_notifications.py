@@ -9,6 +9,7 @@ from dateutil import parser as dateparser
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from notifications.models import Reminder
 from notifications.tasks import (
     push_attendee_update, push_event_full,
     send_join_confirmation_email, send_event_reminder_email,
@@ -58,16 +59,22 @@ class Command(BaseCommand):
                 if start_time_str:
                     try:
                         start_time = dateparser.isoparse(start_time_str)
-                        reminder_time = start_time - timedelta(hours=24)
-                        if reminder_time > timezone.now():
-                            send_event_reminder_email.apply_async(
-                                args=[message["user_email"], message["event_title"], message.get("event_id")],
-                                eta=reminder_time,
-                            )
-                        else:
-                            self.stdout.write("[SKIP] event starts in <24h, no reminder scheduled")
+                        # Save/update a local reminder record instead of scheduling with ETA
+                        Reminder.objects.update_or_create(
+                            user_id=message["user_id"],
+                            event_id=message["event_id"],
+                            defaults={
+                                "user_email": message["user_email"],
+                                "event_title": message["event_title"],
+                                "event_start_time": start_time,
+                                "sent": False
+                            }
+                        )
+                        self.stdout.write(f"[INFO] Created/updated reminder for user {message['user_id']} event {message['event_id']}")
                     except (ValueError, TypeError) as e:
                         self.stdout.write(f"[WARNING] Invalid event_start_time '{start_time_str}': {e}")
+                    except Exception as e:
+                        self.stdout.write(f"[ERROR] Failed to save reminder: {e}")
                 else:
                     self.stdout.write("[SKIP] No event_start_time provided in message")
 
@@ -75,6 +82,15 @@ class Command(BaseCommand):
                 push_attendee_update.delay(
                     message["event_id"], message["current_count"], message["capacity"]
                 )
+                # Delete the reminder if it exists
+                try:
+                    Reminder.objects.filter(
+                        user_id=message["user_id"],
+                        event_id=message["event_id"]
+                    ).delete()
+                    self.stdout.write(f"[INFO] Deleted reminder for user {message['user_id']} event {message['event_id']}")
+                except Exception as e:
+                    self.stdout.write(f"[ERROR] Failed to delete reminder: {e}")
 
             elif msg_type == "event_full":
                 push_event_full.delay(

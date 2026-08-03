@@ -153,6 +153,12 @@ CHANNEL_LAYERS = {
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'amqp://guest:guest@localhost:5672//')
 CELERY_TIMEZONE = 'UTC'
 CELERY_ENABLE_UTC = True
+CELERY_BEAT_SCHEDULE = {
+    'check-reminders-every-5-minutes': {
+        'task': 'notifications.tasks.check_and_send_reminders',
+        'schedule': 300.0,  # 300 seconds = 5 minutes
+    },
+}
 
 
 # --- Email (Google SMTP) ---
