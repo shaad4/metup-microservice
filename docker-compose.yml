@@ -118,6 +118,21 @@ services:
       - rabbitmq
       - redis
 
+  notif-beat:
+    image: metups-notif-celery:latest
+    restart: on-failure
+    command: celery -A notification_service beat --loglevel=info
+    volumes:
+      - ./notification-service:/app
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - REDIS_HOST=redis
+      - EVENT_SERVICE_URL=http://event-django:8002
+    depends_on:
+      - rabbitmq
+      - redis
+
+
   notif-bridge:
     build: ./notification-service
     restart: on-failure
